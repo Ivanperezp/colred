@@ -1,0 +1,71 @@
+name: Actualizar datos y publicar
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '7,37 * * * *'   # cada 30 min: datos de XM
+    - cron: '23 9 * * 1'     # lunes 04:23 (Bogotá): red, centrales, UPME y calidad
+  workflow_dispatch:
+    inputs:
+      semanal:
+        description: 'Actualizar también red y centrales'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - name: Red, centrales, UPME y calidad (semanal)
+        if: github.event.schedule == '23 9 * * 1' || inputs.semanal
+        run: npm run datos:semanal
+
+      - name: Guardar datos semanales en el repositorio
+        if: github.event.schedule == '23 9 * * 1' || inputs.semanal
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data public/api/v1/calidad_municipios.json
+          git diff --cached --quiet || git commit -m "Datos semanales $(date -u +%F)"
+          git push
+
+      - name: Datos de XM
+        run: npm run datos:xm
+        continue-on-error: true
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,258 @@
+{
+ "generado": "2026-11-21",
+ "items": [
+  {
+   "xm_nombre": "ITUANGO",
+   "nombre": "Hidroituango",
+   "lat": 7.1305667,
+   "lon": -75.663528,
+   "municipio": "Ituango",
+   "departamento": "Antioquia",
+   "precision": "sitio",
+   "fuente": "https://en.wikipedia.org/wiki/Ituango_Dam",
+   "nota": "Coordenadas de presa y casa de maquinas (Wikipedia)"
+  },
+  {
+   "xm_nombre": "PARQUE SOLAR PUERTA DE ORO",
+   "nombre": "Parque Solar Puerta de Oro",
+   "lat": 5.06944,
+   "lon": -74.59806,
+   "municipio": "Guaduas",
+   "departamento": "Cundinamarca",
+   "precision": "municipio",
+   "fuente": "https://www.valoraanalitik.com/?p=595164",
+   "nota": "Cabecera Guaduas (Wikipedia en Guaduas). Articulo ubica el parque entre Guaduas y Chaguani; GEM (gem.wiki/Puerta_De_Oro_Solar_Project) da 5.0675,-74.5951 aprox."
+  },
+  {
+   "xm_nombre": "TERMOCENTRO CC",
+   "nombre": "Termocentro",
+   "lat": 6.444481,
+   "lon": -74.380683,
+   "municipio": "Cimitarra",
+   "departamento": "Santander",
+   "precision": "aproximada",
+   "fuente": "https://gem.wiki/Central_Termocentro",
+   "nota": "Coordenadas GEM Wiki Coordenadas de fuente secundaria (GEM/Inzonex); pendiente de confirmar con fuente oficial."
+  },
+  {
+   "xm_nombre": "ZIPAEMG 2",
+   "nombre": "Termozipa",
+   "lat": 4.970817,
+   "lon": -73.947258,
+   "municipio": "Tocancipa",
+   "departamento": "Cundinamarca",
+   "precision": "aproximada",
+   "fuente": "https://gem.wiki/Termozipa_power_station",
+   "nota": "Coordenadas GEM Wiki Coordenadas de fuente secundaria (GEM/Inzonex); pendiente de confirmar con fuente oficial."
+  },
+  {
+   "xm_nombre": "TESORITO",
+   "nombre": "El Tesorito",
+   "lat": 8.646644,
+   "lon": -75.45943,
+   "municipio": null,
+   "departamento": "Cordoba",
+   "precision": "aproximada",
+   "fuente": "https://gem.wiki/El_Tesorito_power_station",
+   "nota": "GEM marca coordenadas como aproximadas y municipio 'San Antonio Sahagun' (dudoso; no confirmado) Coordenadas de fuente secundaria (GEM/Inzonex); pendiente de confirmar con fuente oficial."
+  },
+  {
+   "xm_nombre": "ATLANTICO",
+   "nombre": "Parque Solar Atlantico (Enel)",
+   "lat": 10.63111,
+   "lon": -74.92111,
+   "municipio": "Sabanalarga",
+   "departamento": "Atlantico",
+   "precision": "municipio",
+   "fuente": "https://energiaestrategica.com/energiaestrategica/es/notes/enel-green-power-inicia-la-construccion-de-los-proyectos-guayepo-iii-y-atlantico",
+   "nota": "Proyecto en Sabanalarga y Usiacuri; coordenadas cabecera Sabanalarga (en.wikipedia.org/wiki/Sabanalarga,_Atlantico)"
+  },
+  {
+   "xm_nombre": "SHANGRI LA",
+   "nombre": "Parque Solar Shangri-La",
+   "lat": 4.433,
+   "lon": -75.233,
+   "municipio": "Ibague",
+   "departamento": "Tolima",
+   "precision": "municipio",
+   "fuente": "https://www.eltiempo.com/colombia/otras-ciudades/entro-en-operacion-shangri-la-uno-de-los-parques-de-energia-solar-mas-grandes-del-pais-en-ibague-3508714",
+   "nota": "Zona rural de Ibague; coordenadas ciudad (en.wikipedia.org/wiki/Ibague). GEM trae coordenadas erroneas (Meta), descartadas"
+  },
+  {
+   "xm_nombre": "PARQUE SOLAR LA UNION",
+   "nombre": "Parque Solar La Union",
+   "lat": 8.75,
+   "lon": -75.883,
+   "municipio": "Monteria",
+   "departamento": "Cordoba",
+   "precision": "municipio",
+   "fuente": "https://www.portafolio.co/energia/solarpack-inauguro-parque-solar-la-union-en-monteria-cordoba-607069",
+   "nota": "Coordenadas ciudad (en.wikipedia.org/wiki/Monteria)"
+  },
+  {
+   "xm_nombre": "BSB 503",
+   "nombre": "Bosques Solares de Bolivar 503",
+   "lat": 10.63111,
+   "lon": -74.92111,
+   "municipio": "Sabanalarga",
+   "departamento": "Atlantico",
+   "precision": "municipio",
+   "fuente": "https://www.elheraldo.co/atlantico/en-sabanalarga-atlantico-se-inauguro-el-parque-bosques-solares-de-bolivar-1108137",
+   "nota": "Complejo de 5 parques en zona rural de Sabanalarga (confirmado tambien por energiaestrategica); coordenadas cabecera"
+  },
+  {
+   "xm_nombre": "LA MATA",
+   "nombre": "Parque Solar La Mata",
+   "lat": 8.6171,
+   "lon": -73.8017,
+   "municipio": "La Gloria",
+   "departamento": "Cesar",
+   "precision": "municipio",
+   "fuente": "https://www.elespectador.com/ambiente/un-parque-solar-brindara-energia-a-106000-hogares-de-la-gloria-en-cesar/",
+   "nota": "Municipio confirmado por El Espectador; coordenadas aproximadas de GEM (gem.wiki/La_Mata_solar_farm_(Colombia)) por no hallar las de la cabecera en Wikipedia"
+  },
+  {
+   "xm_nombre": "INCAUCA 1",
+   "nombre": "Cogeneracion Incauca",
+   "lat": 3.25,
+   "lon": -76.25,
+   "municipio": "Miranda",
+   "departamento": "Cauca",
+   "precision": "municipio",
+   "fuente": "https://www.larepublica.co/empresas/la-planta-de-cogeneracion-de-energia-de-incauca-genera-54-millones-de-kwh-al-mes-3575674",
+   "nota": "Coordenadas Miranda (en.wikipedia.org/wiki/Miranda,_Cauca)"
+  },
+  {
+   "xm_nombre": "TEQUENDAMA 2",
+   "nombre": "Tequendama",
+   "lat": null,
+   "lon": null,
+   "municipio": null,
+   "departamento": "Cundinamarca",
+   "precision": "no_encontrada",
+   "fuente": "https://www.power-technology.com/data-insights/power-plant-profile-tequendama-colombia/",
+   "nota": "Solo departamento (Cundinamarca, cuenca rio Bogota); municipio no hallado"
+  },
+  {
+   "xm_nombre": "ESCUELA DE MINAS",
+   "nombre": "Escuela de Minas",
+   "lat": 6.2396,
+   "lon": -75.3087,
+   "municipio": "Marinilla",
+   "departamento": "Antioquia",
+   "precision": "aproximada",
+   "fuente": "https://gem.wiki/Escuela_de_Minas_hydroelectric_plant",
+   "nota": "Coordenadas GEM Wiki; no verificado con otra fuente Coordenadas de fuente secundaria (GEM/Inzonex); pendiente de confirmar con fuente oficial."
+  },
+  {
+   "xm_nombre": "TERMOCARIBE III 1",
+   "nombre": "Termocaribe III",
+   "lat": 10.444783,
+   "lon": -75.398107,
+   "municipio": null,
+   "departamento": "Bolivar",
+   "precision": "aproximada",
+   "fuente": "https://inzonex.co.uk/poweratlas/plant/termocaribe-iii-power-station.html",
+   "nota": "Coordenadas Inzonex; municipio no indicado Coordenadas de fuente secundaria (GEM/Inzonex); pendiente de confirmar con fuente oficial."
+  },
+  {
+   "xm_nombre": "CARACOLI I",
+   "nombre": "Parque Solar Caracoli I",
+   "lat": 10.867,
+   "lon": -74.783,
+   "municipio": "Malambo",
+   "departamento": "Atlantico",
+   "precision": "municipio",
+   "fuente": "https://www.energiaestrategica.com/colombia-supera-los-3-gw-solares-y-revela-los-10-proyectos-mas-potentes-del-pais/",
+   "nota": "Coordenadas municipio (es.wikipedia.org/wiki/Malambo_(Atlantico))"
+  },
+  {
+   "xm_nombre": "SAN MIGUEL",
+   "nombre": "San Miguel (rio Calderas)",
+   "lat": 5.9918,
+   "lon": -75.0686,
+   "municipio": null,
+   "departamento": "Antioquia",
+   "precision": "aproximada",
+   "fuente": "https://gem.wiki/San_Miguel_hydroelectric_plant",
+   "nota": "GEM indica coordenadas exactas; GEM dice 52 MW, rio Calderas; municipio no indicado Coordenadas de fuente secundaria (GEM/Inzonex); pendiente de confirmar con fuente oficial."
+  },
+  {
+   "xm_nombre": "SUNNORTE",
+   "nombre": "Sunnorte (OCAA)",
+   "lat": 8.233,
+   "lon": -73.35,
+   "municipio": "Ocana",
+   "departamento": "Norte de Santander",
+   "precision": "municipio",
+   "fuente": "https://www.energiaestrategica.com/colombia-supera-los-3-gw-solares-y-revela-los-10-proyectos-mas-potentes-del-pais/",
+   "nota": "Coordenadas ciudad (en.wikipedia.org/wiki/Ocana,_Norte_de_Santander)"
+  },
+  {
+   "xm_nombre": "VILLANUEVA 1",
+   "nombre": "Refoenergy Villanueva (biomasa)",
+   "lat": 4.6087361,
+   "lon": -72.9287917,
+   "municipio": "Villanueva",
+   "departamento": "Casanare",
+   "precision": "no_encontrada",
+   "fuente": "https://www.energiaestrategica.com/edf-colombia-inicia-la-construccion-de-la-planta-de-biomasa-refoenergy-villanueva/",
+   "nota": "No se confirmó que XM VILLANUEVA 1 sea la planta de esa fuente."
+  },
+  {
+   "xm_nombre": "CELSIA SOLAR ESCOBAL",
+   "nombre": "Celsia Solar Escobal I-V",
+   "lat": 4.433,
+   "lon": -75.233,
+   "municipio": "Ibague",
+   "departamento": "Tolima",
+   "precision": "municipio",
+   "fuente": "https://www.energiaestrategica.com/colombia-supera-los-3-gw-solares-y-revela-los-10-proyectos-mas-potentes-del-pais/",
+   "nota": "Lista indica Ibague; GEM (gem.wiki/Escobal_solar_farm) indica Alvarado 4.567,-74.954 (conflicto) Fuentes en conflicto sobre el municipio (Ibagué vs. Alvarado)."
+  },
+  {
+   "xm_nombre": "SAN ANDRES DE CUERQUIA",
+   "nombre": "Hidroelectrica San Andres de Cuerquia",
+   "lat": 6.91444,
+   "lon": -75.67583,
+   "municipio": "San Andres de Cuerquia",
+   "departamento": "Antioquia",
+   "precision": "municipio",
+   "fuente": "https://www.valoraanalitik.com/?p=94137",
+   "nota": "Planta entre San Andres de Cuerquia y San Jose de la Montana; coordenadas del infobox de Wikipedia (en.wikipedia.org/wiki/San_Andres_de_Cuerquia)"
+  },
+  {
+   "xm_nombre": "BAJO TULUA",
+   "nombre": "Bajo Tulua",
+   "lat": null,
+   "lon": null,
+   "municipio": null,
+   "departamento": null,
+   "precision": "no_encontrada",
+   "fuente": "",
+   "nota": "Sin fuente hallada"
+  },
+  {
+   "xm_nombre": "RIO PIEDRAS",
+   "nombre": "Rio Piedras",
+   "lat": null,
+   "lon": null,
+   "municipio": null,
+   "departamento": null,
+   "precision": "no_encontrada",
+   "fuente": "",
+   "nota": "Sin fuente hallada"
+  },
+  {
+   "xm_nombre": "PLANTA SOLAR SAN FRANCISCO",
+   "nombre": "Planta Solar San Francisco",
+   "lat": null,
+   "lon": null,
+   "municipio": null,
+   "departamento": null,
+   "precision": "no_encontrada",
+   "fuente": "https://www.energiaestrategica.com/colombia-supera-los-3-gw-solares-y-revela-los-10-proyectos-mas-potentes-del-pais/",
+   "nota": "Solo hallada una San Francisco de 5 MW (EPM, Palestina, Caldas); no coincide con 142 MW"
+  }
+ ]
+}

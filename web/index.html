@@ -1,0 +1,24 @@
+<!doctype html><html lang="es-CO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Mapa público abierto de la red eléctrica de Colombia"><meta name="theme-color" content="#2457d6"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%279%27 fill=%27%232457d6%27/%3E%3Cpath d=%27M18.5 5 9 18h6l-1.5 9L23 14h-6z%27 fill=%27white%27/%3E%3C/svg%3E"><title>RedCO · Mapa de la red eléctrica de Colombia</title><link rel="stylesheet" href="/src/style.css"></head><body>
+<div id="map" aria-label="Mapa de la red eléctrica de Colombia"></div>
+<div class="float tl">
+  <header class="card hdr">
+    <a class="logo" href="./" aria-label="RedCO, inicio"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#2457d6"/><path d="M18.5 5 9 18h6l-1.5 9L23 14h-6z" fill="#fff"/><circle cx="25" cy="8" r="2.4" fill="#f5a300"/></svg><span>Red<b>CO</b></span></a>
+    <form id="search" role="search" autocomplete="off"><label for="q" class="sr">Buscar municipio o departamento</label>
+      <svg class="mag" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m13 13 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="q" type="text" role="combobox" placeholder="Municipio o departamento y pulsa Intro" aria-controls="results" aria-expanded="false" aria-autocomplete="list" enterkeyhint="search"><ul id="results" role="listbox" hidden></ul></form>
+    <button id="menu" class="menu" type="button" aria-expanded="false" aria-controls="nav" aria-label="Menú"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <nav id="nav" aria-label="Principal"><a href="./" class="on" aria-current="page">Mapa</a><a href="#precio" data-go="precio">Precio de bolsa</a><a href="#embalses" data-go="embalses">Embalses</a><a href="./como-funciona.html">Cómo funciona</a></nav>
+  </header>
+  <div id="chips" role="group" aria-label="Capas del mapa"></div>
+  <p class="hint">Vista nacional: red de transmisión. Acerca el mapa o pulsa un departamento para ver su detalle.</p>
+</div>
+<details id="legend" class="card" open><summary>Leyenda</summary><div id="legend-body"></div></details>
+<aside id="side" aria-label="Indicadores y detalle">
+  <section id="ficha" class="card" hidden aria-live="polite"></section>
+  <section id="panel" class="card">
+    <button id="handle" type="button" aria-expanded="true" aria-controls="cards"><span>Indicadores nacionales</span><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="m5 8 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div id="cards"></div>
+  </section>
+</aside>
+<p id="foot">Estimaciones propias marcadas como tales. No reemplaza avisos de XM, IDEAM ni de tu empresa de energía. <a href="./como-funciona.html">Cómo funciona</a></p>
+<script type="module" src="/src/main.ts"></script></body></html>

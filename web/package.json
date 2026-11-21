@@ -1,0 +1,30 @@
+{
+  "name": "redco",
+  "version": "1.0.0",
+  "description": "Mapa abierto de la red eléctrica de Colombia",
+  "scripts": {
+    "build": "tsc && vite build",
+    "dev": "vite",
+    "datos:osm": "node scripts/fetch-osm.mjs",
+    "datos:xm": "node scripts/fetch-xm.mjs",
+    "datos:centrales": "node scripts/fetch-centrales-xm.mjs",
+    "datos:upme": "node scripts/fetch-upme.mjs",
+    "datos:calidad": "node scripts/fetch-calidad.mjs",
+    "datos:test": "node scripts/test-parsers.mjs",
+    "vivo": "node scripts/vivo.mjs",
+    "datos:semanal": "node scripts/fetch-osm.mjs && node scripts/fetch-centrales-xm.mjs && node scripts/fetch-upme.mjs && node scripts/fetch-calidad.mjs",
+    "datos:dane": "python scripts/build_dane.py"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "maplibre-gl": "^6.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "type": "module",
+  "private": true
+}
