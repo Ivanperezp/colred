@@ -167,6 +167,21 @@ async function fetchSource(url) {
   if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
 }
 
+
+// OSM a veces tiene la misma central dos veces (punto y polígono). Quita la copia sin potencia
+// si hay otra central con nombre equivalente y potencia de XM a menos de 15 km.
+export function quitarDuplicados(gj) {
+  const kmd = (a, b) => { const r = Math.PI / 180, dy = (b[1] - a[1]) * r, dx = (b[0] - a[0]) * r * Math.cos(a[1] * r); return 6371 * Math.hypot(dx, dy); };
+  const xm = gj.features.filter(f => String(f.properties.mw_fuente || '').startsWith('XM'));
+  const before = gj.features.length;
+  gj.features = gj.features.filter(f => {
+    const p = f.properties; if (Number(p.mw) || String(p.mw_fuente || '').startsWith('XM')) return true;
+    const c = coreName(p.nombre) || norm(p.nombre || ''); if (!c || /sin nombre/.test(c)) return true;
+    return !xm.some(x => kmd(f.geometry.coordinates, x.geometry.coordinates) < 15 && score(c, coreName(x.properties.nombre) || norm(x.properties.nombre)) >= 0.8);
+  });
+  return before - gj.features.length;
+}
+
 async function main() {
   const today = new Date(ymd(new Date()) + 'T00:00:00Z');
   const win = { StartDate: ymd(addDays(today, -4)), EndDate: ymd(addDays(today, -1)) };
@@ -260,6 +275,7 @@ async function main() {
     }
   } catch (e) { console.log('  aviso: ubicación por fuentes oficiales omitida:', e.message); }
   const stillUnmatched = unmatchedPlants.filter(p => !placed.has(p));
+  const dup = quitarDuplicados(gj); if (dup) console.log(`Duplicados de OSM sin potencia eliminados: ${dup}`);
   gj.nota = 'Ubicación OpenStreetMap; potencia de XM (capacidad efectiva neta) cuando hay coincidencia de nombre.';
   writeJsonAtomic(file, gj);
 
