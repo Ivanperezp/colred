@@ -101,7 +101,7 @@ document.addEventListener('visibilitychange', () => { if (map) applyFlow(); });
 
 // ---------- Intercambios internacionales ----------
 const ARROW_AT: Record<string, [number, number]> = { Ecuador: [-77.64, 0.81], Venezuela: [-72.3, 11.0] };
-const ARROW_DIR: Record<string, number> = { Ecuador: 180, Venezuela: 90 }; // grados de la flecha "saliendo" de Colombia (0 = norte)
+const ARROW_DIR: Record<string, number> = { Ecuador: 205, Venezuela: 75 }; // grados de la flecha "saliendo" de Colombia (0 = norte)
 let intercambios: any = null; const ixMarkers: maplibregl.Marker[] = [];
 const ixPaises = () => (intercambios?.paises || []).filter((p: any) => ARROW_AT[p.pais] && (Number(p.importacion_mwh) || Number(p.exportacion_mwh)));
 const ixText = (p: any) => { const s = Number(p.saldo_mwh) || 0; return `${p.pais} · ${s > 0 ? 'exporta ' : s < 0 ? 'importa ' : 'saldo '}${fmt(Math.abs(s))} MWh`; };
@@ -109,9 +109,9 @@ const addIxMarkers = () => {
   ixPaises().forEach((p: any) => {
     const s = Number(p.saldo_mwh) || 0, ang = ARROW_DIR[p.pais] + (s < 0 ? 180 : 0);
     const el = document.createElement('div'); el.className = 'ix';
-    el.innerHTML = `${s ? `<svg viewBox="-24 -24 48 48" width="44" height="44" aria-hidden="true"><g transform="rotate(${ang})"><path d="M0 20V-6" stroke="#fff" stroke-width="9" stroke-linecap="round"/><path d="M-13 -4L0 -22L13 -4Z" fill="#fff" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><path d="M0 20V-6" stroke="#0b6e4f" stroke-width="5" stroke-linecap="round"/><path d="M-11 -5L0 -20L11 -5Z" fill="#0b6e4f"/></g></svg>` : ''}<span>${esc(ixText(p))}</span>`;
+    el.innerHTML = `<i style="transform:rotate(${ang}deg)">${s ? '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</i><span><b>${esc(p.pais)}</b> ${s > 0 ? 'exporta' : s < 0 ? 'importa' : 'saldo'} ${fmt(Math.abs(s))} MWh</span>`;
     el.setAttribute('role', 'img'); el.setAttribute('aria-label', ixText(p));
-    ixMarkers.push(new maplibregl.Marker({ element: el }).setLngLat(ARROW_AT[p.pais]).addTo(map));
+    ixMarkers.push(new maplibregl.Marker({ element: el, anchor: 'left', offset: [-12, 0] }).setLngLat(ARROW_AT[p.pais]).addTo(map));
   });
 };
 const setIx = () => ixMarkers.forEach(m => { m.getElement().style.display = on.intercambios ? '' : 'none'; });
