@@ -1,0 +1,32 @@
+name: Reportar un error
+description: Algo en el mapa o en los datos no es correcto
+title: "Error: "
+labels: ["datos"]
+body:
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: ¿Qué está mal?
+      options: [Línea, Subestación, Central, Dato de XM, Otro]
+    validations:
+      required: true
+  - type: input
+    id: donde
+    attributes:
+      label: ¿Dónde?
+      description: Municipio o nombre del elemento.
+      placeholder: "Ej.: Subestación Ocaña, Norte de Santander"
+    validations:
+      required: true
+  - type: textarea
+    id: deberia
+    attributes:
+      label: ¿Qué debería decir?
+      description: Describe el dato correcto.
+    validations:
+      required: true
+  - type: input
+    id: fuente
+    attributes:
+      label: Fuente (opcional)
+      description: Enlace o documento que respalde el dato correcto.

@@ -112,3 +112,4 @@ button{font:inherit;color:inherit}
 .sg b{color:var(--ink,#14202e);font-variant-numeric:tabular-nums;white-space:nowrap}.sg b.dn{color:#b42318}
 .mixbar{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0 6px;background:var(--line)}.mixbar i{display:block;height:100%}
 .mixlg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:11.5px;color:var(--mut)}.mixlg i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.mixlg b{color:var(--ink,#14202e);font-weight:600}
+.pp .err{display:inline-block;margin-top:5px;font-size:11px;color:var(--mut)}

@@ -1,6 +1,7 @@
 import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { operadoresDe } from './operadores';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -11,6 +12,8 @@ const jget = async (u: string) => { const r = await fetch(u); if (!r.ok) throw n
 const tryGet = (u: string) => jget(u).catch(() => null);
 const hhmm = (s?: string) => { if (!s) return '--:--'; const d = new Date(s); return isNaN(+d) ? '--:--' : d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); };
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+const REPORT = 'https://github.com/Ivanperezp/colred/issues/new?template=reportar-error.yml';
+const errLink = (n: string) => `<a class="err" href="${REPORT}&title=${encodeURIComponent('Error: ' + n)}" target="_blank" rel="noopener">¿Dato incorrecto?</a>`;
 const fmt = (n: number, d = 0) => n.toLocaleString('es-CO', { maximumFractionDigits: d });
 
 const TECH: Record<string, string> = { 'Hidráulica': '#2b7bd8', 'Térmica gas': '#e8742a', 'Térmica carbón': '#4a4f57', 'Eólica': '#12a594', 'Solar': '#f0b400', 'Biomasa': '#7fa32a', 'Otra': '#8a5fb5' };
@@ -42,7 +45,7 @@ const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<stri
 const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'] };
 const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM' };
 const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true };
-let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
+let calidadData: any = null; let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
 
 const alertFc = (): Fc => {
   const byId = new Map<string, any>();
@@ -84,9 +87,9 @@ const addDataLayers = () => {
 };
 
 const popupHtml: Record<string, (p: any) => string> = {
-  lineas: p => `<div class="pp"><b>${esc(p.name || 'Línea de transmisión')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Tensión desconocida'}</div></div>`,
-  subestaciones: p => `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Subestación'}</div></div>`,
-  centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div></div>`,
+  lineas: p => `<div class="pp"><b>${esc(p.name || 'Línea de transmisión')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Tensión desconocida'}</div>${errLink(p.name || 'Línea de transmisión')}</div>`,
+  subestaciones: p => `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Subestación'}</div>${errLink(p.nombre || p.name || 'Subestación')}</div>`,
+  centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div>${errLink(p.nombre)}</div>`,
   alertas: p => `<div class="pp"><b>${esc(p.municipio)}</b><div class="m">${esc(p.departamento)}</div><div class="m">Alerta ${esc(p.nivel)} · ${esc(p.tipo)}</div><div class="m">${esc(p.texto)}</div></div>`,
 };
 const HIT = ['alertas', 'centrales', 'subestaciones', 'lineas'];
@@ -95,6 +98,12 @@ const HIT = ['alertas', 'centrales', 'subestaciones', 'lineas'];
 const inRing = (pt: number[], r: number[][]) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
 const inGeom = (pt: number[], g: any) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).some((p: number[][][]) => inRing(pt, p[0]) && !p.slice(1).some(h => inRing(pt, h)));
 const bboxOf = (g: any) => { let a = 180, b = 90, c = -180, d = -90; JSON.stringify(g.coordinates).match(/-?\d+\.?\d*,-?\d+\.?\d*/g)!.forEach(s => { const [x, y] = s.split(',').map(Number); a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); }); return [a, b, c, d] as [number, number, number, number]; };
+const calidadHtml = (code: string) => {
+  const ops = calidadData?.items ? operadoresDe(calidadData.items, code) : [];
+  if (!ops.length) return '';
+  const f = (v: number | null) => v == null ? 's/d' : v.toLocaleString('es-CO', { maximumFractionDigits: 4 });
+  return `<h3>Calidad del servicio (continuidad)</h3>` + ops.map(o => `<div class="pl" style="display:block;font-size:13px"><b>${esc(o.nombre)}</b><div class="m">ITAD nivel 1: ${f(o.n1)} · niveles 2 y 3: ${f(o.n23)}</div><div class="m">Último reporte: ${o.anio}, trimestre ${o.trimestre}</div></div>`).join('') + `<div class="src" style="margin:6px 0 0">ITAD: índice trimestral agrupado de discontinuidad por nivel de tensión (adimensional; menor es mejor). Es del operador, no del departamento. Fuente: Superservicios</div>`;
+};
 const openFicha = (f: any, fit = true) => {
   const code = String(f.properties.cod_dpto), nombre = f.properties.nombre, g = f.geometry;
   const pls = (data.centrales.features || []).filter(c => inGeom(c.geometry.coordinates, g)).sort((a, b) => (b.properties.mw || 0) - (a.properties.mw || 0));
@@ -105,7 +114,7 @@ const openFicha = (f: any, fit = true) => {
   $('ficha').innerHTML = `<button class="x" type="button" aria-label="Cerrar ficha">×</button><h2>${esc(nombre)}</h2><div class="src" style="margin:0">Departamento · código DANE ${esc(code)}</div>
   ${alertasData ? `<h3>Alertas IDEAM</h3>` : ''}${!alertasData ? '' : al.length ? al.map((a: any) => `<span class="tag" style="background:${LVL[a.nivel] || '#ccc'}22;color:#14202e;border:1px solid ${LVL[a.nivel] || '#ccc'}">${esc(a.municipio)}: ${esc(a.tipo)} (${esc(a.nivel)})</span>`).join('') : '<div class="src" style="margin:0">Sin alertas registradas.</div>'}
   <h3>Centrales</h3>${pls.length ? shown.map(c => `<div class="pl"><span><i style="background:${TECH[c.properties.tecnologia] || '#8a5fb5'}"></i>${esc(c.properties.nombre)}</span><span>${c.properties.mw ? fmt(Number(c.properties.mw)) + ' MW' : 's/d'}</span></div>`).join('') + (nUnk ? `<div class="src" style="margin:6px 0 0">y ${nUnk} centrales pequeñas sin nombre registrado</div>` : '') + `<div class="tot"><span>Total</span><span>${fmt(total)} MW</span></div>` : '<div class="src" style="margin:0">No hay centrales registradas en este departamento.</div>'}
-  <h3>Calidad del servicio (SUI)</h3><div class="soon">Calidad del servicio (SUI): próximamente</div>`;
+  ${calidadHtml(code)}`;
   $('ficha').hidden = false; document.body.classList.add('sheet'); ($('ficha').querySelector('.x') as HTMLElement).onclick = closeFicha;
   map.setFilter('dept-sel', ['==', ['get', 'cod_dpto'], code]);
   if (fit) { const [a, b, c, d] = bboxOf(g); map.fitBounds([[a, b], [c, d]], { padding: { top: 140, bottom: 60, left: 280, right: 360 }, maxZoom: 7, duration: 800 }); }
@@ -263,8 +272,8 @@ document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListe
 document.querySelector<HTMLElement>('#nav a[href="./"]')!.addEventListener('click', e => { e.preventDefault(); closeFicha(); document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.getAttribute('href') === './')); map.flyTo({ center: [-73.8, 5.2], zoom: mobile ? 4.3 : 5.2 }); });
 
 (async () => {
-  const [style, , m, dem, pre, emb, al, rie, mix] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json')]);
-  meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
+  const [style, , m, dem, pre, emb, al, rie, mix, cal] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json')]);
+  calidadData = cal; meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
   if (!alertasData) { delete labels.alertas; on.alertas = false; }
   buildLegend(); buildCards(dem, pre, emb, rie, mix); initSearch(); buildChips();
   initMap(style);
