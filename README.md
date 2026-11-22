@@ -1,4 +1,6 @@
-# RedCO
+# ColRed
+
+https://colred.org
 
 Mapa abierto de la red eléctrica de Colombia: líneas de transmisión, subestaciones y centrales en un solo mapa, con la demanda, el precio de bolsa y el nivel de los embalses publicados por XM.
 

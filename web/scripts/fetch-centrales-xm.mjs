@@ -81,7 +81,7 @@ export async function osmLookup(plants) {
   const q = `[out:json][timeout:180];area["ISO3166-1"="CO"][admin_level=2]->.co;(nwr["power"~"^(plant|generator)$"]["name"~"${re}",i](area.co);nwr["landuse"="reservoir"]["name"~"${re}",i](area.co););out center tags;`;
   for (const url of [...OVERPASS, ...OVERPASS]) {
     try {
-      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'RedCO/0.1 (mapa abierto de la red electrica de Colombia)' } });
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'ColRed/0.1 (https://colred.org)' } });
       if (!r.ok) { console.log(`  Overpass ${url} -> HTTP ${r.status}: ${(await r.text()).replace(/\s+/g, ' ').slice(0, 300)}`); await new Promise(z => setTimeout(z, 8000)); continue; }
       const j = await r.json();
       return (j.elements || []).map(e => ({ name: e.tags?.name || '', power: e.tags?.power || e.tags?.landuse, lat: e.lat ?? e.center?.lat, lon: e.lon ?? e.center?.lon })).filter(e => e.lat && e.lon && e.name);
@@ -163,7 +163,7 @@ export function placeFromSources(plants, entries, idx, minMw = 1, thr = 0.8) {
   return res;
 }
 async function fetchSource(url) {
-  const r = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'RedCO/0.1 (mapa abierto de la red electrica de Colombia)' } });
+  const r = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'ColRed/0.1 (https://colred.org)' } });
   if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
 }
 

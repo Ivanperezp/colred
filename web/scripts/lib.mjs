@@ -24,7 +24,7 @@ export async function fetchJson(url, opts = {}, { retries = 3, timeoutMs = 60000
     try {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), timeoutMs);
-      const r = await fetch(url, { ...opts, signal: ctl.signal, headers: { 'User-Agent': 'redco-datos/1.0', Accept: 'application/json', ...(opts.headers || {}) } });
+      const r = await fetch(url, { ...opts, signal: ctl.signal, headers: { 'User-Agent': 'ColRed/0.1 (https://colred.org)', Accept: 'application/json', ...(opts.headers || {}) } });
       clearTimeout(t);
       if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
       const j = await r.json();

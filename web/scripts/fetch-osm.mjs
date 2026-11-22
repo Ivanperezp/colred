@@ -10,7 +10,7 @@ async function overpass(query) {
     const url = ENDPOINTS[i % ENDPOINTS.length];
     try {
       console.log('Consultando', url, '...');
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'RedCO-datos/1.0' }, body: 'data=' + encodeURIComponent(query) });
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ColRed-datos/1.0' }, body: 'data=' + encodeURIComponent(query) });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return (await r.json()).elements || [];
     } catch (e) { err = e; console.warn('Fallo:', e.message, '- reintentando'); await sleep(8000 * (i + 1)); }
