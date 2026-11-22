@@ -7,6 +7,8 @@
     "dev": "vite",
     "datos:osm": "node scripts/fetch-osm.mjs",
     "datos:xm": "node scripts/fetch-xm.mjs",
+    "datos:mix": "node scripts/fetch-mix.mjs",
+    "datos:riesgo": "node scripts/fetch-riesgo.mjs",
     "datos:centrales": "node scripts/fetch-centrales-xm.mjs",
     "datos:upme": "node scripts/fetch-upme.mjs",
     "datos:calidad": "node scripts/fetch-calidad.mjs",

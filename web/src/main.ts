@@ -172,8 +172,34 @@ const bars = (v: number[], label: string) => {
   return `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="${label}">${v.map((y, i) => `<rect x="${(i * w + .6).toFixed(1)}" y="${(58 - y / mx * 56).toFixed(1)}" width="${(w - 1.2).toFixed(1)}" height="${(y / mx * 56).toFixed(1)}" rx="1" fill="${i === v.length - 1 ? '#f5a300' : '#9db4ee'}"/>`).join('')}</svg>`;
 };
 const card = (id: string, h: string, body: string) => `<section class="dc" id="${id}"><h2>${h}</h2>${body}</section>`;
-const buildCards = (dem: any, pre: any, emb: any) => {
-  let h = '';
+const MIX_C: Record<string, string> = { ...TECH, 'Térmica líquidos': '#c9503a', 'Biomasa y otras': TECH['Biomasa'], 'Térmica': TECH['Térmica gas'], 'Otras': TECH['Biomasa'] };
+const riesgoCard = (r: any) => {
+  if (!r || !['bajo', 'medio', 'alto'].includes(r.nivel)) return '';
+  const C: Record<string, string> = { bajo: '#0a7a45', medio: '#b86e00', alto: '#b42318' }, BG: Record<string, string> = { bajo: '#e3f5ec', medio: '#fff1d6', alto: '#fde4e1' };
+  const rows = (r.senales || []).map((x: any) => `<div class="sg"><span>${esc(x.nombre)}</span><b class="${x.estado === 'alerta' ? 'dn' : ''}" title="${esc(x.detalle)}">${typeof x.valor === 'number' ? fmt(x.valor, 1) + ' ' + esc(x.unidad) : 's/d'}</b></div>`).join('');
+  const err = r.status === 'error' ? '<div class="warn" role="alert">Sin datos nuevos de XM; se muestra el último cálculo.</div>' : '';
+  return card('riesgo', 'Riesgo de racionamiento', `<span class="rnivel" style="background:${BG[r.nivel]};color:${C[r.nivel]}">${r.nivel.toUpperCase()}</span>${rows}${err}<div class="src">Indicador propio con datos de XM · <a href="./como-funciona.html#riesgo">cómo se calcula</a></div>`);
+};
+const mixCard = (g: any) => {
+  const t: any[] = g?.por_tecnologia; if (!Array.isArray(t) || !t.length) return '';
+  const fecha = g.fecha_operacion ? ' · ' + new Date(g.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
+  const bar = `<div class="mixbar" role="img" aria-label="Participación por tecnología">${t.map(x => `<i style="width:${x.pct}%;background:${MIX_C[x.tecnologia] || '#8a5fb5'}" title="${esc(x.tecnologia)} ${fmt(x.pct, 1)} %"></i>`).join('')}</div>`;
+  const leg = `<div class="mixlg">${t.map(x => `<span><i style="background:${MIX_C[x.tecnologia] || '#8a5fb5'}"></i>${esc(x.tecnologia)} <b>${fmt(x.pct, 1)} %</b></span>`).join('')}</div>`;
+  let area = '';
+  const hz: any[] = g.horario;
+  if (Array.isArray(hz) && hz.length > 1) {
+    const ks = ['Hidráulica', 'Térmica', 'Solar', 'Eólica', 'Otras'], mx = Math.max(...hz.map(o => ks.reduce((a, k) => a + (o[k] || 0), 0)), 1), n = hz.length;
+    const cum = hz.map(() => 0); let paths = '';
+    ks.forEach(k => {
+      const top = hz.map((o, i) => (cum[i] += o[k] || 0)), bot = top.map((y, i) => y - (hz[i][k] || 0)), X = (i: number) => (i / (n - 1) * 200).toFixed(1), Y = (v: number) => (58 - v / mx * 54).toFixed(1);
+      paths += `<polygon points="${top.map((y, i) => `${X(i)},${Y(y)}`).join(' ')} ${bot.map((y, i) => `${X(n - 1 - i)},${Y(bot[n - 1 - i])}`).join(' ')}" fill="${MIX_C[k]}" opacity=".85"/>`;
+    });
+    area = `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="Perfil horario de generación por tecnología">${paths}</svg><div class="ax"><span>00:00</span><span>12:00</span><span>23:00</span></div>`;
+  }
+  return card('mix', `Generación por tecnología${fecha}`, `<div class="big">${fmt(g.total_mwh / 1000, 1)} <small>GWh en el día</small></div>${bar}${leg}${area}${foot('xm', 'XM', g.updated_at)}`);
+};
+const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
+  let h = riesgoCard(rie) + mixCard(mix);
   if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
   else h += card('demanda', 'Demanda de energía', '<div class="src">Sin datos disponibles.</div>');
   if (pre?.series?.length) {
@@ -237,10 +263,10 @@ document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListe
 document.querySelector<HTMLElement>('#nav a[href="./"]')!.addEventListener('click', e => { e.preventDefault(); closeFicha(); document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.getAttribute('href') === './')); map.flyTo({ center: [-73.8, 5.2], zoom: mobile ? 4.3 : 5.2 }); });
 
 (async () => {
-  const [style, , m, dem, pre, emb, al] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json')]);
+  const [style, , m, dem, pre, emb, al, rie, mix] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json')]);
   meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
   if (!alertasData) { delete labels.alertas; on.alertas = false; }
-  buildLegend(); buildCards(dem, pre, emb); initSearch(); buildChips();
+  buildLegend(); buildCards(dem, pre, emb, rie, mix); initSearch(); buildChips();
   initMap(style);
   (window as any).__map = map;
 })();

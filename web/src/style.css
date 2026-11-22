@@ -26,7 +26,7 @@ button{font:inherit;color:inherit}
 #nav a{padding:6px 10px;border-radius:8px;color:var(--mut);text-decoration:none;font-weight:500;white-space:nowrap}
 #nav a:hover{background:#f1f4f9;color:var(--ink)}
 #nav a.on{color:var(--acc);background:var(--acc-soft)}
-.pill{position:absolute;right:14px;bottom:-11px;z-index:2;box-shadow:0 1px 3px rgba(16,32,52,.15);background:#fff4d6;color:#7a4b00;border:1px solid #f3d27a;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:600;white-space:nowrap}
+.nivel{position:absolute;right:14px;bottom:-11px;z-index:2;box-shadow:0 1px 3px rgba(16,32,52,.15);background:#fff4d6;color:#7a4b00;border:1px solid #f3d27a;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:600;white-space:nowrap}
 .pill[hidden]{display:none}
 .hdr{margin-bottom:0}
 #chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -106,3 +106,9 @@ button{font:inherit;color:inherit}
 .dc{scroll-margin:12px;border-radius:10px;transition:background .4s}
 .dc.flash{animation:flash 1.6s ease}
 @keyframes flash{0%,40%{background:#e8efff}100%{background:transparent}}
+
+.rnivel{position:static;box-shadow:none;border:0;display:inline-block;padding:3px 14px;border-radius:999px;font-size:15px;font-weight:700;letter-spacing:.04em;margin:2px 0 8px}
+.sg{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0;border-top:1px solid var(--line);color:var(--mut)}
+.sg b{color:var(--ink,#14202e);font-variant-numeric:tabular-nums;white-space:nowrap}.sg b.dn{color:#b42318}
+.mixbar{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0 6px;background:var(--line)}.mixbar i{display:block;height:100%}
+.mixlg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:11.5px;color:var(--mut)}.mixlg i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.mixlg b{color:var(--ink,#14202e);font-weight:600}

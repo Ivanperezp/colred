@@ -42,4 +42,21 @@ const cidx = buildCentroidIndex([{ properties: { divipola: '13001', nombre: 'Car
 const pl = [{ nombre: 'PCH CARACOLI', nombres: ['PCH CARACOLI'], codigos: ['CRCL'], mw: 3.75, tipo: 'HIDRAULICA' }, { nombre: 'BAYUNCA 1', nombres: ['BAYUNCA 1'], codigos: ['BYN1'], mw: 3, tipo: 'SOLAR' }, { nombre: 'MINI 2', nombres: ['MINI 2'], codigos: ['M2'], mw: 0.5, tipo: 'SOLAR' }];
 const pr = placeFromSources(pl, [...epm, ...fn], cidx);
 assert.equal(pr.length, 2); assert.equal(pr[0].precision, 'oficial'); assert.deepEqual(pr[1].coords, [-75.5, 10.4]); assert.equal(pr[1].precision, 'aproximada');
+
+import { parseCatalogo, pickMetric, parseRecursos } from './xm-catalogo.mjs';
+import { clasificar, agregarGeneracion, construirMix } from './fetch-mix.mjs';
+import { evaluar, ratioAportes } from './fetch-riesgo.mjs';
+const cat = parseCatalogo({ Items: [{ ListEntities: [{ Values: { MetricId: 'Gene', MetricName: 'Generación real', Entity: 'Recurso', Type: 'HourlyEntities' } }, { Values: { MetricId: 'PrecEscasez', MetricName: 'Precio de Escasez', Entity: 'Sistema', Type: 'DailyEntities' } }] }] });
+assert.equal(pickMetric(cat, { idRe: /^Gene$/, entity: 'Recurso' }).id, 'Gene');
+assert.equal(pickMetric(cat, { idRe: /^PrecEsca/, entity: 'Sistema' }).id, 'PrecEscasez');
+assert.equal(pickMetric(cat, { nameRe: /^nada/, entity: 'Sistema' }), null);
+const rec = parseRecursos({ Items: [{ ListEntities: [{ Values: { Code: 'GVIO', Type: 'HIDRAULICA', EnerSource: 'AGUA' } }, { Values: { Code: 'TF1', Type: 'TERMICA', EnerSource: 'GAS' } }, { Values: { Code: 'S1', Type: 'SOLAR', EnerSource: 'RAD_SOLAR' } }] }] });
+assert.equal(clasificar(rec.get('TF1')).fine, 'Térmica gas'); assert.equal(clasificar({ type: 'TERMICA', source: 'CARBÓN' }).fine, 'Térmica carbón');
+const gj = { Items: [{ Date: '2026-11-19', HourlyEntities: [{ Id: 'GVIO', Values: { code: 'GVIO', Hour01: '3000000', Hour02: '1000000' } }, { Id: 'TF1', Values: { code: 'TF1', Hour01: '1000000' } }] }] };
+const ag = agregarGeneracion(gj, rec)['2026-11-19']; const mx = construirMix(ag, '2026-11-19', 'x');
+assert.equal(mx.total_mwh, 5000); assert.equal(mx.por_tecnologia[0].pct, 80); assert.equal(mx.horario[0].Térmica, 1000); assert.equal(mx.horario.length, 24);
+assert.equal(evaluar({ embalse: 35 }), 'alto'); assert.equal(evaluar({ embalse: 70, precio: 900, escasez: 800 }), 'alto');
+assert.equal(evaluar({ embalse: 50 }), 'medio'); assert.equal(evaluar({ embalse: 70, aportes: 70 }), 'medio'); assert.equal(evaluar({ embalse: 70, tendencia: -6 }), 'medio');
+assert.equal(evaluar({ embalse: 70, aportes: 100, tendencia: 1, precio: 300, escasez: 800 }), 'bajo'); assert.equal(evaluar({}), 'bajo');
+assert.equal(ratioAportes([{ date: 'a', value: 80 }, { date: 'b', value: 120 }], [{ date: 'a', value: 100 }, { date: 'b', value: 100 }]), 100);
 console.log('test-parsers: OK');
