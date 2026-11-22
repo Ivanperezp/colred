@@ -39,7 +39,7 @@ const load = async () => {
 };
 
 const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<string, number>)[n] || 0;
-const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'] };
+const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'] };
 const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM' };
 const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true };
 let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
@@ -64,10 +64,11 @@ const addDataLayers = () => {
   const kv: any = ['to-number', ['get', 'tension_kv'], 0];
   const w = (a: number, b: number, c: number) => ['interpolate', ['linear'], ['zoom'], 4, ['case', ['>=', kv, 500], a, ['>=', kv, 220], b, c], 9, ['case', ['>=', kv, 500], a * 2.4, ['>=', kv, 220], b * 2.4, c * 2.4]] as any;
   const vis = (k: string) => ({ visibility: on[k] ? 'visible' : 'none' } as any);
-  lay({ id: 'lineas-glow', type: 'line', source: 'lineas', filter: ['>=', kv, 500], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c0152f', 'line-opacity': .22, 'line-blur': 3, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 7, 9, 16] } });
-  lay({ id: 'lineas-casing', type: 'line', source: 'lineas', layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#fff', 'line-opacity': .85, 'line-width': w(3.6, 2.8, 2.2) } });
-  lay({ id: 'lineas', type: 'line', source: 'lineas', layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: {
-    'line-color': ['case', ['>=', kv, 500], LINE_C[0][1], ['>=', kv, 220], LINE_C[1][1], ['>=', kv, 110], LINE_C[2][1], LINE_C[3][1]], 'line-width': w(2, 1.4, 1) } });
+  lay({ id: 'lineas-glow', type: 'line', source: 'lineas', filter: ['all', ['>=', kv, 500], ['!=', ['get', 'inferido'], true]], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c0152f', 'line-opacity': .22, 'line-blur': 3, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 7, 9, 16] } });
+  lay({ id: 'lineas-casing', type: 'line', source: 'lineas', filter: ['!=', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#fff', 'line-opacity': .85, 'line-width': w(3.6, 2.8, 2.2) } });
+  const lc: any = ['case', ['>=', kv, 500], LINE_C[0][1], ['>=', kv, 220], LINE_C[1][1], ['>=', kv, 110], LINE_C[2][1], LINE_C[3][1]];
+  lay({ id: 'lineas', type: 'line', source: 'lineas', filter: ['!=', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': lc, 'line-width': w(2, 1.4, 1) } });
+  lay({ id: 'lineas-inferidas', type: 'line', source: 'lineas', filter: ['==', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'butt' }, paint: { 'line-color': lc, 'line-opacity': .8, 'line-width': w(1.6, 1.2, 0.9), 'line-dasharray': [2, 2] } });
   lay({ id: 'subestaciones', type: 'circle', source: 'subestaciones', minzoom: 5, layout: vis('subestaciones'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 6], 'circle-color': '#fff', 'circle-stroke-color': '#14202e', 'circle-stroke-width': 1.6 } });
   const tc: any[] = ['match', ['get', 'tecnologia']]; Object.entries(TECH).forEach(([k, v]) => tc.push(k, v)); tc.push('#8a5fb5');
   const mw: any = ['to-number', ['get', 'mw'], 0];

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { parseHourly, parseDaily, pctSeries } from './fetch-xm.mjs';
-import { parseListado, groupPlants, matchPlants, coreName } from './fetch-centrales-xm.mjs';
+import { parseListado, groupPlants, matchPlants, coreName, fixCoord, parseEpm, parseFncer, buildCentroidIndex, placeFromSources } from './fetch-centrales-xm.mjs';
 import { mapLine, mapSub } from './fetch-upme.mjs';
 import { mapMunicipio, mapDepto } from './fetch-dane.mjs';
 import { buildItems } from './fetch-calidad.mjs';
@@ -33,4 +33,13 @@ assert.equal(mapDepto({ properties: { ID_ESPACIA: '11', NOMBRE_DPT: 'BOGOTÁ' },
 
 const q = buildItems([{ id_empresa: '1', empresa: 'A SA', anio: '2020', periodo: '4', nivel_1: '0.1', nivel_2_3: '0.2' }, { id_empresa: '1', empresa: 'A SA', anio: '2021', periodo: '1', nivel_1: '0.3', nivel_2_3: '0.4' }]);
 assert.equal(q.length, 1); assert.equal(q[0].anio, 2021); assert.equal(q[0].itad_nivel_1, 0.3);
+
+assert.equal(fixCoord('-7475839042', true), -74.75839042); assert.equal(fixCoord('6413309229', false), 6.413309229); assert.equal(fixCoord('-75.2271', true), -75.2271);
+const epm = parseEpm([{ nombre: 'Caracolí', ubicaci_n: 'Caracolí', tipo: 'Planta de Energía', longitud: '-7475839042', latitud: '6413309229' }, { nombre: 'Prueba temporal', tipo: 'Planta de Energía', longitud: '-75000001', latitud: '6000001' }, { nombre: 'X', tipo: 'Planta de Aguas', longitud: '-75.1', latitud: '6.1' }]);
+assert.equal(epm.length, 1); assert.equal(epm[0].lat, 6.413309229);
+const fn = parseFncer([{ proyecto: 'BAYUNCA 1', tipo: 'Solar', capacidad: '3.0', departamento: 'BOLÍVAR', municipio: 'CARTAGENA', codigo_municipio: '13001' }]);
+const cidx = buildCentroidIndex([{ properties: { divipola: '13001', nombre: 'Cartagena de Indias', departamento: 'Bolívar', cod_dpto: '13' }, geometry: { type: 'Point', coordinates: [-75.5, 10.4] } }]);
+const pl = [{ nombre: 'PCH CARACOLI', nombres: ['PCH CARACOLI'], codigos: ['CRCL'], mw: 3.75, tipo: 'HIDRAULICA' }, { nombre: 'BAYUNCA 1', nombres: ['BAYUNCA 1'], codigos: ['BYN1'], mw: 3, tipo: 'SOLAR' }, { nombre: 'MINI 2', nombres: ['MINI 2'], codigos: ['M2'], mw: 0.5, tipo: 'SOLAR' }];
+const pr = placeFromSources(pl, [...epm, ...fn], cidx);
+assert.equal(pr.length, 2); assert.equal(pr[0].precision, 'oficial'); assert.deepEqual(pr[1].coords, [-75.5, 10.4]); assert.equal(pr[1].precision, 'aproximada');
 console.log('test-parsers: OK');

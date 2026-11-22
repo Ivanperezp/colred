@@ -12,8 +12,9 @@
     "datos:calidad": "node scripts/fetch-calidad.mjs",
     "datos:test": "node scripts/test-parsers.mjs",
     "vivo": "node scripts/vivo.mjs",
-    "datos:semanal": "node scripts/fetch-osm.mjs && node scripts/fetch-centrales-xm.mjs && node scripts/fetch-upme.mjs && node scripts/fetch-calidad.mjs",
-    "datos:dane": "python scripts/build_dane.py"
+    "datos:semanal": "node scripts/fetch-osm.mjs && node scripts/unir-tramos.mjs && node scripts/fetch-centrales-xm.mjs && node scripts/fetch-upme.mjs && node scripts/fetch-calidad.mjs",
+    "datos:dane": "python scripts/build_dane.py",
+    "datos:tramos": "node scripts/unir-tramos.mjs"
   },
   "keywords": [],
   "author": "",

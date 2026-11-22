@@ -92,6 +92,81 @@ export async function osmLookup(plants) {
   return [];
 }
 
+// ---- Fuentes oficiales de ubicación (datos.gov.co, Socrata) para plantas XM sin ubicar ----
+// EPM "Plantas De Aguas Y Energía" (q6f3-ygre): nombre, ubicaci_n (municipio), tipo, latitud, longitud (coordenadas exactas).
+// MinEnergía/UPME "Meta FNCER" (vy9n-w6hc): proyecto, tipo, capacidad, departamento, municipio, codigo_municipio (DIVIPOLA).
+export const SOURCES = { epm: 'https://www.datos.gov.co/resource/q6f3-ygre.json?$limit=5000', fncer: 'https://www.datos.gov.co/resource/vy9n-w6hc.json?$limit=5000' };
+const inCo = (lat, lon) => lat > -4.5 && lat < 13.6 && lon > -79.5 && lon < -66.5;
+// Las coordenadas de EPM vienen a veces sin separador decimal (p. ej. -7475839042): se reubica la coma para caer dentro de Colombia.
+export function fixCoord(v, isLon) {
+  const raw = String(v ?? '').trim(); if (!raw) return null;
+  const n = Number(raw.replace(',', '.')); const lim = isLon ? 180 : 90;
+  const ok = x => Number.isFinite(x) && (isLon ? x < -66.5 && x > -79.5 : x > -4.5 && x < 13.6);
+  if (ok(n) && Math.abs(n) < lim) return n;
+  const digits = raw.replace(/[^0-9]/g, ''); if (digits.length < 3) return null;
+  const sign = raw.startsWith('-') ? -1 : 1;
+  for (const k of [1, 2]) { const x = sign * Number(digits.slice(0, k) + '.' + digits.slice(k)); if (ok(x)) return x; }
+  return null;
+}
+export function parseEpm(rows) {
+  const out = [];
+  for (const r of rows || []) {
+    if (!/energ/i.test(String(r.tipo ?? r.tipo_de_planta ?? 'energia'))) continue;
+    const name = String(r.nombre ?? '').trim(); if (!name || /prueba/i.test(name)) continue;
+    const lat = fixCoord(r.latitud, false), lon = fixCoord(r.longitud, true);
+    if (lat == null || lon == null || !inCo(lat, lon)) continue;
+    out.push({ fuente: 'epm', name, tipo: '', municipio: String(r.ubicaci_n ?? r.ubicacion ?? '').trim(), lat, lon });
+  }
+  return out;
+}
+export function parseFncer(rows) {
+  const out = [];
+  for (const r of rows || []) {
+    const name = String(r.proyecto ?? '').trim(); if (!name) continue;
+    out.push({ fuente: 'fncer', name, tipo: String(r.tipo ?? ''), municipio: String(r.municipio ?? ''), departamento: String(r.departamento ?? ''), divipola: String(r.codigo_municipio ?? '').padStart(5, '0'), mw: Number(r.capacidad) || null });
+  }
+  return out;
+}
+export function buildCentroidIndex(features) {
+  const byCode = new Map(), byName = new Map();
+  for (const f of features || []) { const p = f.properties || {}; const c = f.geometry?.coordinates; if (!c) continue; byCode.set(p.divipola, { ...p, coords: c }); const k = norm(p.nombre); (byName.get(k) || byName.set(k, []).get(k)).push({ ...p, coords: c }); }
+  return { byCode, byName };
+}
+export function findMunicipio(idx, { divipola, municipio, departamento }) {
+  if (divipola && idx.byCode.has(divipola)) return idx.byCode.get(divipola);
+  for (const part of String(municipio || '').split(/\s*(?:[-/,;]|\sy\s)\s*/)) {
+    const c = idx.byName.get(norm(part.replace(/\(.*\)/, ''))); if (!c) continue;
+    const d = norm(departamento || ''); const hit = d ? c.find(x => norm(x.departamento) === d) : c.length === 1 ? c[0] : c.find(x => x.cod_dpto === '05');
+    if (hit) return hit;
+  }
+  return null;
+}
+// Asigna a cada planta XM (>= minMw) la mejor entrada de las fuentes oficiales por nombre normalizado.
+export function placeFromSources(plants, entries, idx, minMw = 1, thr = 0.8) {
+  const res = [];
+  for (const p of plants) {
+    if (!(p.mw >= minMw)) continue;
+    const b = coreName(p.nombre) || norm(p.nombre), key = ALIAS[b] || b, pr = romans(p.nombres.join(' '));
+    let best = null;
+    for (const e of entries) {
+      let sc = score(coreName(e.name) || norm(e.name), key);
+      if (disjoint(pr, romans(e.name))) sc -= 0.5;
+      const a = techKind(e.name + ' ' + (e.tipo || '')), t = techKind(p.tipo); if (a !== '?' && t !== '?' && a !== t) sc -= 0.5;
+      if (sc >= thr && (!best || sc > best.sc)) best = { e, sc };
+    }
+    if (!best) continue;
+    const e = best.e; let coords, precision, ubic;
+    if (e.lat != null) { coords = [+e.lon.toFixed(5), +e.lat.toFixed(5)]; precision = 'oficial'; ubic = `Coordenadas oficiales EPM (datos.gov.co q6f3-ygre): "${e.name}"${e.municipio ? ', ' + e.municipio : ''}`; }
+    else { const m = findMunicipio(idx, e); if (!m) continue; coords = m.coords; precision = 'aproximada'; ubic = `Aproximada al municipio de ${m.nombre} (${m.departamento}): MinEnergía/UPME Meta FNCER (datos.gov.co vy9n-w6hc)`; }
+    res.push({ plant: p, coords, precision, ubicacion: ubic });
+  }
+  return res;
+}
+async function fetchSource(url) {
+  const r = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'RedCO/0.1 (mapa abierto de la red electrica de Colombia)' } });
+  if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+}
+
 async function main() {
   const today = new Date(ymd(new Date()) + 'T00:00:00Z');
   const win = { StartDate: ymd(addDays(today, -4)), EndDate: ymd(addDays(today, -1)) };
@@ -165,6 +240,25 @@ async function main() {
   }
   if (manual.length) console.log(`Ubicaciones verificadas a mano: ${nManual} plantas agregadas desde data/ubicaciones_manual.json`);
   if (found.length) console.log(`Búsqueda por nombre en OSM: ${placed.size} de ${big.length} plantas grandes ubicadas`);
+  // Plantas XM >= 1 MW aún sin ubicar: fuentes oficiales (datos.gov.co) con coordenadas o municipio
+  let nOficial = 0;
+  try {
+    const pend = unmatchedPlants.filter(p => !placed.has(p) && p.mw >= 1);
+    if (pend.length) {
+      const entries = [];
+      for (const [k, parse] of [['epm', parseEpm], ['fncer', parseFncer]]) {
+        try { const e = parse(await fetchSource(SOURCES[k])); entries.push(...e); console.log(`Fuente oficial ${k}: ${e.length} registros`); } catch (e) { console.log(`  aviso: fuente ${k} no disponible (${e.message}); se omite`); }
+      }
+      const idx = buildCentroidIndex(readJson(P('data', 'municipios_centroides.geojson'))?.features);
+      for (const r of placeFromSources(pend, entries, idx)) {
+        const p = r.plant; placed.add(p); nOficial++;
+        gj.features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: r.coords },
+          properties: { nombre: titleCase(p.nombre), tecnologia: TECH_XM(p.tipo), mw: +p.mw.toFixed(1), mw_fuente: 'XM (capacidad efectiva neta)', xm_codigos: p.codigos.join(','), xm_nombres: p.nombres.join(', '),
+            origen: 'busqueda_nombre', precision: r.precision, ubicacion: r.ubicacion } });
+      }
+      console.log(`Fuentes oficiales: ${nOficial} de ${pend.length} plantas XM >= 1 MW ubicadas`);
+    }
+  } catch (e) { console.log('  aviso: ubicación por fuentes oficiales omitida:', e.message); }
   const stillUnmatched = unmatchedPlants.filter(p => !placed.has(p));
   gj.nota = 'Ubicación OpenStreetMap; potencia de XM (capacidad efectiva neta) cuando hay coincidencia de nombre.';
   writeJsonAtomic(file, gj);
