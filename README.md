@@ -36,6 +36,10 @@ Otros comandos:
 
 GitHub Actions actualiza los datos de XM cada 30 minutos y publica la web en GitHub Pages. Los lunes también actualiza la red y las centrales. Ver `.github/workflows/publicar.yml`.
 
+## Autor
+
+Iván Pérez · [LinkedIn](https://www.linkedin.com/in/ivanperezp)
+
 ## Licencia
 
 Código bajo licencia MIT. Los datos derivados de OpenStreetMap se distribuyen bajo ODbL.
