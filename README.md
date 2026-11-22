@@ -38,7 +38,7 @@ GitHub Actions actualiza los datos de XM cada 30 minutos y publica la web en Git
 
 ## Autor
 
-Iván Pérez · [LinkedIn](https://www.linkedin.com/in/ivanperezp)
+Iván Alcides · [LinkedIn](https://www.linkedin.com/in/ivanperezp)
 
 ## Licencia
 
