@@ -228,7 +228,13 @@ handle.onclick = () => setPanel(panel.classList.contains('closed'));
 const mobile = matchMedia('(max-width:720px)').matches;
 if (mobile) { setPanel(false); $('legend').removeAttribute('open'); }
 $('menu').onclick = () => { const o = $('nav').classList.toggle('open'); $('menu').setAttribute('aria-expanded', String(o)); };
-document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); setPanel(true); $('nav').classList.remove('open'); $('menu').setAttribute('aria-expanded', 'false'); $(a.dataset.go!).scrollIntoView({ block: 'nearest' }); }));
+document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListener('click', e => {
+  e.preventDefault(); closeFicha(); setPanel(true); $('nav').classList.remove('open'); $('menu').setAttribute('aria-expanded', 'false');
+  document.querySelectorAll('#nav a').forEach(x => { x.classList.toggle('on', x === a); x.removeAttribute('aria-current'); }); a.setAttribute('aria-current', 'page');
+  const t = $(a.dataset.go!); if (!t) return;
+  requestAnimationFrame(() => { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); });
+}));
+document.querySelector<HTMLElement>('#nav a[href="./"]')!.addEventListener('click', e => { e.preventDefault(); closeFicha(); document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.getAttribute('href') === './')); map.flyTo({ center: [-73.8, 5.2], zoom: mobile ? 4.3 : 5.2 }); });
 
 (async () => {
   const [style, , m, dem, pre, emb, al] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json')]);

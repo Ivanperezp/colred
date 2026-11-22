@@ -102,3 +102,7 @@ button{font:inherit;color:inherit}
   #foot{display:none}
   .pill{position:static;order:2;box-shadow:none;margin-right:auto}.logo{margin-right:0}.menu{order:3}#search{order:4}#nav{order:5}
 }
+
+.dc{scroll-margin:12px;border-radius:10px;transition:background .4s}
+.dc.flash{animation:flash 1.6s ease}
+@keyframes flash{0%,40%{background:#e8efff}100%{background:transparent}}
