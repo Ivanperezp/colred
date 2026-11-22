@@ -42,9 +42,9 @@ const load = async () => {
 };
 
 const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<string, number>)[n] || 0;
-const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'] };
-const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM' };
-const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true };
+const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas', 'lineas-flujo'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
+const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM', intercambios: 'Intercambios' };
+const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true, intercambios: true };
 let calidadData: any = null; let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
 
 const alertFc = (): Fc => {
@@ -72,6 +72,7 @@ const addDataLayers = () => {
   const lc: any = ['case', ['>=', kv, 500], LINE_C[0][1], ['>=', kv, 220], LINE_C[1][1], ['>=', kv, 110], LINE_C[2][1], LINE_C[3][1]];
   lay({ id: 'lineas', type: 'line', source: 'lineas', filter: ['!=', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': lc, 'line-width': w(2, 1.4, 1) } });
   lay({ id: 'lineas-inferidas', type: 'line', source: 'lineas', filter: ['==', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'butt' }, paint: { 'line-color': lc, 'line-opacity': .8, 'line-width': w(1.6, 1.2, 0.9), 'line-dasharray': [2, 2] } });
+  lay({ id: 'lineas-flujo', type: 'line', source: 'lineas', minzoom: 5, filter: ['all', ['>=', kv, 110], ['!=', ['get', 'inferido'], true]], layout: { visibility: on.lineas && flowOn ? 'visible' : 'none', 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': '#fff', 'line-opacity': .6, 'line-width': w(1.2, 0.9, 0.7), 'line-dasharray': DASH[0] } });
   lay({ id: 'subestaciones', type: 'circle', source: 'subestaciones', minzoom: 5, layout: vis('subestaciones'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 6], 'circle-color': '#fff', 'circle-stroke-color': '#14202e', 'circle-stroke-width': 1.6 } });
   const tc: any[] = ['match', ['get', 'tecnologia']]; Object.entries(TECH).forEach(([k, v]) => tc.push(k, v)); tc.push('#8a5fb5');
   const mw: any = ['to-number', ['get', 'mw'], 0];
@@ -84,6 +85,41 @@ const addDataLayers = () => {
     lay({ id: 'dept-label', type: 'symbol', source: 'departamentos', minzoom: 5.4, layout: { 'text-field': ['get', 'nombre'], 'text-font': font, 'text-size': 11, 'text-transform': 'uppercase', 'text-letter-spacing': .08, 'text-max-width': 7 }, paint: { 'text-color': '#5d6b7b', 'text-halo-color': 'rgba(255,255,255,.9)', 'text-halo-width': 1.4 } });
     lay({ id: 'centrales-label', type: 'symbol', source: 'centrales', minzoom: 5, filter: ['>=', mw, 500], layout: { ...vis('centrales'), 'text-field': ['concat', ['get', 'nombre'], '\n', ['to-string', mw], ' MW'], 'text-font': fontB, 'text-size': 11, 'text-anchor': 'top', 'text-offset': [0, 1.1], 'text-optional': true }, paint: { 'text-color': '#14202e', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
   }
+};
+
+// ---------- Animación de corriente (ilustrativa) ----------
+const DASH = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
+let flowOn = !matchMedia('(max-width:720px)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+let flowTimer = 0, flowStep = 0;
+const flowStop = () => { if (flowTimer) { clearInterval(flowTimer); flowTimer = 0; } };
+const flowTick = () => { if (map.getLayer('lineas-flujo') && map.getZoom() >= 5) { flowStep = (flowStep + 1) % DASH.length; map.setPaintProperty('lineas-flujo', 'line-dasharray', DASH[flowStep] as any); } };
+const applyFlow = () => {
+  if (map.getLayer('lineas-flujo')) map.setLayoutProperty('lineas-flujo', 'visibility', on.lineas && flowOn ? 'visible' : 'none');
+  flowStop(); if (flowOn && on.lineas && !document.hidden) flowTimer = window.setInterval(flowTick, 80);
+};
+document.addEventListener('visibilitychange', () => { if (map) applyFlow(); });
+
+// ---------- Intercambios internacionales ----------
+const ARROW_AT: Record<string, [number, number]> = { Ecuador: [-77.64, 0.81], Venezuela: [-72.3, 11.0] };
+const ARROW_DIR: Record<string, number> = { Ecuador: 180, Venezuela: 90 }; // grados de la flecha "saliendo" de Colombia (0 = norte)
+let intercambios: any = null; const ixMarkers: maplibregl.Marker[] = [];
+const ixPaises = () => (intercambios?.paises || []).filter((p: any) => ARROW_AT[p.pais] && (Number(p.importacion_mwh) || Number(p.exportacion_mwh)));
+const ixText = (p: any) => { const s = Number(p.saldo_mwh) || 0; return `${p.pais} · ${s > 0 ? 'exporta ' : s < 0 ? 'importa ' : 'saldo '}${fmt(Math.abs(s))} MWh`; };
+const addIxMarkers = () => {
+  ixPaises().forEach((p: any) => {
+    const s = Number(p.saldo_mwh) || 0, ang = ARROW_DIR[p.pais] + (s < 0 ? 180 : 0);
+    const el = document.createElement('div'); el.className = 'ix';
+    el.innerHTML = `${s ? `<svg viewBox="-24 -24 48 48" width="44" height="44" aria-hidden="true"><g transform="rotate(${ang})"><path d="M0 20V-6" stroke="#fff" stroke-width="9" stroke-linecap="round"/><path d="M-13 -4L0 -22L13 -4Z" fill="#fff" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><path d="M0 20V-6" stroke="#0b6e4f" stroke-width="5" stroke-linecap="round"/><path d="M-11 -5L0 -20L11 -5Z" fill="#0b6e4f"/></g></svg>` : ''}<span>${esc(ixText(p))}</span>`;
+    el.setAttribute('role', 'img'); el.setAttribute('aria-label', ixText(p));
+    ixMarkers.push(new maplibregl.Marker({ element: el }).setLngLat(ARROW_AT[p.pais]).addTo(map));
+  });
+};
+const setIx = () => ixMarkers.forEach(m => { m.getElement().style.display = on.intercambios ? '' : 'none'; });
+const ixCard = () => {
+  const ps = ixPaises(); if (!ps.length) return '';
+  const fecha = intercambios.fecha_operacion ? ' · ' + new Date(intercambios.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
+  const rows = ps.map((p: any) => { const s = Number(p.saldo_mwh) || 0; return `<div class="sg"><span>${esc(p.pais)}</span><b class="${s < 0 ? 'dn' : ''}">${s > 0 ? 'Exporta ' : s < 0 ? 'Importa ' : 'Saldo '}${fmt(Math.abs(s))} MWh</b></div>`; }).join('');
+  return card('intercambios', `Intercambios internacionales${fecha}`, `${rows}<div class="note">Saldo del día entre Colombia y otro país.</div>${foot('xm', 'XM', intercambios.updated_at)}`);
 };
 
 const popupHtml: Record<string, (p: any) => string> = {
@@ -146,8 +182,9 @@ const initMap = (style: StyleSpecification | null) => {
 const buildChips = () => {
   const box = $('chips');
   Object.keys(groups).filter(k => labels[k]).forEach(k => {
+    if (k === 'intercambios' && !ixPaises().length) return;
     const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = labels[k]; b.setAttribute('aria-pressed', 'true');
-    b.onclick = () => { on[k] = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on[k])); groups[k].forEach(l => map.getLayer(l) && map.setLayoutProperty(l, 'visibility', on[k] ? 'visible' : 'none')); };
+    b.onclick = () => { on[k] = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on[k])); groups[k].forEach(l => map.getLayer(l) && map.setLayoutProperty(l, 'visibility', on[k] ? 'visible' : 'none')); if (k === 'lineas') applyFlow(); if (k === 'intercambios') setIx(); };
     box.append(b);
   });
 };
@@ -157,6 +194,8 @@ const buildLegend = () => {
   <h3>Centrales por tecnología</h3>${Object.entries(TECH).map(([t, c]) => row(c, t, true)).join('')}<span class="src">Tamaño según potencia (MW); punto pequeño = sin dato</span>
   <h3>Subestaciones</h3><div><span class="dot" style="background:#fff;border:2px solid #14202e;box-shadow:none"></span>Subestación</div>
   ${alertasData ? '<h3>Alertas IDEAM</h3>' : ''}${!alertasData ? '' : Object.entries(LVL).map(([t, c]) => row(c, t[0].toUpperCase() + t.slice(1), true)).join('')}
+  ${ixPaises().length ? '<h3>Intercambios</h3><div><svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" style="margin-right:8px;flex:none"><path d="M1 6H15" stroke="#0b6e4f" stroke-width="3"/><path d="M13 1L21 6L13 11Z" fill="#0b6e4f"/></svg>Saldo del día con otro país</div>' : ''}
+  <h3>Animación</h3><label class="sw-t"><input type="checkbox" id="flow-t" role="switch" ${flowOn ? 'checked' : ''}><span>Animación de corriente</span></label><span class="src">La animación es ilustrativa; no indica el sentido real del flujo.</span>
   <span class="src" style="margin-top:10px">Fuentes: XM, UPME, DANE y OpenStreetMap.</span></div>`;
 };
 
@@ -207,7 +246,7 @@ const mixCard = (g: any) => {
   return card('mix', `Generación por tecnología${fecha}`, `<div class="big">${fmt(g.total_mwh / 1000, 1)} <small>GWh en el día</small></div>${bar}${leg}${area}${foot('xm', 'XM', g.updated_at)}`);
 };
 const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
-  let h = riesgoCard(rie) + mixCard(mix);
+  let h = riesgoCard(rie) + mixCard(mix) + ixCard();
   if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
   else h += card('demanda', 'Demanda de energía', '<div class="src">Sin datos disponibles.</div>');
   if (pre?.series?.length) {
@@ -271,10 +310,12 @@ document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListe
 document.querySelector<HTMLElement>('#nav a[href="./"]')!.addEventListener('click', e => { e.preventDefault(); closeFicha(); document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.getAttribute('href') === './')); map.flyTo({ center: [-73.8, 5.2], zoom: mobile ? 4.3 : 5.2 }); });
 
 (async () => {
-  const [style, , m, dem, pre, emb, al, rie, mix, cal] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json')]);
-  calidadData = cal; meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
+  const [style, , m, dem, pre, emb, al, rie, mix, cal, ixd] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json'), tryGet('api/v1/intercambios.json')]);
+  calidadData = cal; if (ixd && Array.isArray(ixd.paises)) intercambios = ixd; meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
   if (!alertasData) { delete labels.alertas; on.alertas = false; }
   buildLegend(); buildCards(dem, pre, emb, rie, mix); initSearch(); buildChips();
-  initMap(style);
+  initMap(style); addIxMarkers();
+  $<HTMLInputElement>('flow-t').onchange = e => { flowOn = (e.target as HTMLInputElement).checked; applyFlow(); };
+  map.on('load', applyFlow);
   (window as any).__map = map;
 })();

@@ -59,4 +59,15 @@ assert.equal(evaluar({ embalse: 35 }), 'alto'); assert.equal(evaluar({ embalse: 
 assert.equal(evaluar({ embalse: 50 }), 'medio'); assert.equal(evaluar({ embalse: 70, aportes: 70 }), 'medio'); assert.equal(evaluar({ embalse: 70, tendencia: -6 }), 'medio');
 assert.equal(evaluar({ embalse: 70, aportes: 100, tendencia: 1, precio: 300, escasez: 800 }), 'bajo'); assert.equal(evaluar({}), 'bajo');
 assert.equal(ratioAportes([{ date: 'a', value: 80 }, { date: 'b', value: 120 }], [{ date: 'a', value: 100 }, { date: 'b', value: 100 }]), 100);
+
+import { elegirMetricas, agregar, construir, paisDe } from './fetch-intercambios.mjs';
+{
+  const cat = [{ id: 'CompBolsaTIEEner', name: 'Compras en Bolsa TIE', entity: 'Sistema', type: 'DailyEntities' }, { id: 'VentBolsaTIEEner', name: 'Ventas en Bolsa TIE', entity: 'Sistema', type: 'DailyEntities' }, { id: 'VentBolsaIntEner', name: 'Ventas en Bolsa Int', entity: 'Sistema', type: 'DailyEntities' }];
+  const sel = elegirMetricas(cat);
+  assert.equal(sel.length, 3); assert.equal(sel[0].pais, 'Ecuador'); assert.equal(sel[2].pais, 'Venezuela');
+  assert.equal(paisDe('Enlace Jamondino-Pomasqui'), 'Ecuador');
+  const exp = agregar(parseDaily({ Items: [{ Date: '2026-11-19', DailyEntities: [{ Values: { Value: '2000000' } }] }] }), 'Ecuador');
+  const out = construir(sel, sel.map((s, i) => ({ ...s, acc: i === 1 ? exp : new Map() })), '2026-11-19', 'x');
+  assert.equal(out.paises[0].saldo_mwh, 2000); assert.equal(out.paises[1].saldo_mwh, 0);
+}
 console.log('test-parsers: OK');
