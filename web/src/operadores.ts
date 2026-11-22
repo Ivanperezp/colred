@@ -43,3 +43,16 @@ export const operadoresDe = (items: any[], code: string): Op[] => {
 
 // Departamentos abastecidos en su mayoría por las Zonas No Interconectadas (no están conectados a la red nacional)
 export const ZNI = new Set(['88', '91', '94', '97', '99']);
+
+// Prestadores verificados en informes de la Superservicios y la CREG, para departamentos que no están
+// en el conjunto de calidad del servicio (datos.gov.co as4w-pgry).
+export const MANUAL: Record<string, string[]> = {
+  '88': ['SOPESA'],
+  '91': ['Energía para el Amazonas (ENAM)'],
+  '94': ['Gensa (generación en Inírida)'],
+  '97': ['Gobernación del Vaupés (distribución en Mitú)', 'Gensa (generación)'],
+  '99': ['Electrovichada'],
+  '95': ['Energuaviare'],
+  '85': ['Enerca'],
+  '86': ['Empresa de Energía del Putumayo'],
+};

@@ -1,7 +1,7 @@
 import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { operadoresDe, ZNI } from './operadores';
+import { operadoresDe, ZNI, MANUAL } from './operadores';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -136,9 +136,9 @@ const inGeom = (pt: number[], g: any) => (g.type === 'Polygon' ? [g.coordinates]
 const bboxOf = (g: any) => { let a = 180, b = 90, c = -180, d = -90; JSON.stringify(g.coordinates).match(/-?\d+\.?\d*,-?\d+\.?\d*/g)!.forEach(s => { const [x, y] = s.split(',').map(Number); a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); }); return [a, b, c, d] as [number, number, number, number]; };
 const calidadHtml = (code: string) => {
   const ops = calidadData?.items ? operadoresDe(calidadData.items, code) : [];
-  const names = [...new Set(ops.map(o => o.nombre))];
+  const names = [...new Set([...ops.map(o => o.nombre), ...(MANUAL[code] || [])])];
   const zni = ZNI.has(code) ? `<div class="opr zni">La mayor parte del departamento está en las Zonas No Interconectadas: se abastece con plantas locales, no con la red nacional.</div>` : '';
-  return (names.length ? `<div class="opr"><span>Operador de red</span><b>${names.map(esc).join(' · ')}</b></div>` : '') + zni;
+  return (names.length ? `<div class="opr"><span>${names.length > 1 ? 'Prestadores' : 'Prestador'}</span><b>${names.map(esc).join(' · ')}</b></div>` : '') + zni;
 };
 const openFicha = (f: any, fit = true) => {
   const code = String(f.properties.cod_dpto), nombre = f.properties.nombre, g = f.geometry;
