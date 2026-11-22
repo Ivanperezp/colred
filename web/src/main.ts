@@ -100,9 +100,8 @@ const inGeom = (pt: number[], g: any) => (g.type === 'Polygon' ? [g.coordinates]
 const bboxOf = (g: any) => { let a = 180, b = 90, c = -180, d = -90; JSON.stringify(g.coordinates).match(/-?\d+\.?\d*,-?\d+\.?\d*/g)!.forEach(s => { const [x, y] = s.split(',').map(Number); a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); }); return [a, b, c, d] as [number, number, number, number]; };
 const calidadHtml = (code: string) => {
   const ops = calidadData?.items ? operadoresDe(calidadData.items, code) : [];
-  if (!ops.length) return '';
-  const f = (v: number | null) => v == null ? 's/d' : v.toLocaleString('es-CO', { maximumFractionDigits: 4 });
-  return `<h3>Calidad del servicio (continuidad)</h3>` + ops.map(o => `<div class="pl" style="display:block;font-size:13px"><b>${esc(o.nombre)}</b><div class="m">ITAD nivel 1: ${f(o.n1)} · niveles 2 y 3: ${f(o.n23)}</div><div class="m">Último reporte: ${o.anio}, trimestre ${o.trimestre}</div></div>`).join('') + `<div class="src" style="margin:6px 0 0">ITAD: índice trimestral agrupado de discontinuidad por nivel de tensión (adimensional; menor es mejor). Es del operador, no del departamento. Fuente: Superservicios</div>`;
+  const names = [...new Set(ops.map(o => o.nombre))];
+  return names.length ? `<div class="opr"><span>Operador de red</span><b>${names.map(esc).join(' · ')}</b></div>` : '';
 };
 const openFicha = (f: any, fit = true) => {
   const code = String(f.properties.cod_dpto), nombre = f.properties.nombre, g = f.geometry;
@@ -112,9 +111,9 @@ const openFicha = (f: any, fit = true) => {
   const nUnk = pls.filter(unk).length; const shown = pls.filter(c => !unk(c));
   const al = (alertasData?.alertas || []).filter((a: any) => String(a.divipola_mpio).slice(0, 2) === code);
   $('ficha').innerHTML = `<button class="x" type="button" aria-label="Cerrar ficha">×</button><h2>${esc(nombre)}</h2><div class="src" style="margin:0">Departamento · código DANE ${esc(code)}</div>
+  ${calidadHtml(code)}
   ${alertasData ? `<h3>Alertas IDEAM</h3>` : ''}${!alertasData ? '' : al.length ? al.map((a: any) => `<span class="tag" style="background:${LVL[a.nivel] || '#ccc'}22;color:#14202e;border:1px solid ${LVL[a.nivel] || '#ccc'}">${esc(a.municipio)}: ${esc(a.tipo)} (${esc(a.nivel)})</span>`).join('') : '<div class="src" style="margin:0">Sin alertas registradas.</div>'}
-  <h3>Centrales</h3>${pls.length ? shown.map(c => `<div class="pl"><span><i style="background:${TECH[c.properties.tecnologia] || '#8a5fb5'}"></i>${esc(c.properties.nombre)}</span><span>${c.properties.mw ? fmt(Number(c.properties.mw)) + ' MW' : 's/d'}</span></div>`).join('') + (nUnk ? `<div class="src" style="margin:6px 0 0">y ${nUnk} centrales pequeñas sin nombre registrado</div>` : '') + `<div class="tot"><span>Total</span><span>${fmt(total)} MW</span></div>` : '<div class="src" style="margin:0">No hay centrales registradas en este departamento.</div>'}
-  ${calidadHtml(code)}`;
+  <h3>Centrales</h3>${pls.length ? shown.map(c => `<div class="pl"><span><i style="background:${TECH[c.properties.tecnologia] || '#8a5fb5'}"></i>${esc(c.properties.nombre)}</span><span>${c.properties.mw ? fmt(Number(c.properties.mw)) + ' MW' : 's/d'}</span></div>`).join('') + (nUnk ? `<div class="src" style="margin:6px 0 0">y ${nUnk} centrales pequeñas sin nombre registrado</div>` : '') + `<div class="tot"><span>Total</span><span>${fmt(total)} MW</span></div>` : '<div class="src" style="margin:0">No hay centrales registradas en este departamento.</div>'}`;
   $('ficha').hidden = false; document.body.classList.add('sheet'); ($('ficha').querySelector('.x') as HTMLElement).onclick = closeFicha;
   map.setFilter('dept-sel', ['==', ['get', 'cod_dpto'], code]);
   if (fit) { const [a, b, c, d] = bboxOf(g); map.fitBounds([[a, b], [c, d]], { padding: { top: 140, bottom: 60, left: 280, right: 360 }, maxZoom: 7, duration: 800 }); }
