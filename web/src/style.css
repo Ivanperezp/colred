@@ -47,6 +47,8 @@ button{font:inherit;color:inherit}
 .sw{width:26px;border-radius:3px;flex:none}
 .dot{width:11px;height:11px;border-radius:50%;flex:none;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25);margin:0 7.5px}
 .lg .src{display:block;margin-top:6px}
+.lg label[for="network-source"]{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+.lg select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#14202e;font:inherit;font-size:12px}
 .src{font-size:11.5px;color:var(--faint);margin-top:6px}
 .warn{margin-top:8px;padding:6px 8px;background:#fff4d6;border-radius:8px;color:#7a4b00;font-size:12px}
 #side{position:absolute;top:12px;right:12px;z-index:5;width:316px;max-height:calc(100vh - 24px);overflow:auto;display:flex;flex-direction:column;gap:8px;pointer-events:none;scrollbar-width:thin}
@@ -127,4 +129,5 @@ button{font:inherit;color:inherit}
 .ix i{width:24px;height:24px;border-radius:50%;background:#0e9384;display:grid;place-items:center;box-shadow:0 0 0 3px rgba(14,147,132,.22),0 1px 3px rgba(0,0,0,.25);flex:none}
 .ix span{background:rgba(255,255,255,.96);color:#14202e;border:1px solid #d5dde7;border-radius:6px;padding:2px 7px;font-size:11.5px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .ix span b{color:#0b6e63;font-weight:700}
+.ix-empty i{background:#627184;box-shadow:0 0 0 3px rgba(98,113,132,.22)}
 .opr.zni{display:block;color:#5a4300;background:#fff6dc;line-height:1.4}

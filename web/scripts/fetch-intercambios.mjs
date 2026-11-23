@@ -12,12 +12,12 @@ export function elegirMetricas(cat) {
   const out = [];
   const find = (idRe, nameRe, filt = () => true) => cat.filter(filt).find(m => idRe.test(m.id)) || cat.filter(filt).find(m => nameRe.test(nrm(m.name)));
   // 1) físicas por país/enlace/sistema
-  const phys = cat.filter(m => /^(impo|expo)ener/i.test(m.id) || /^(importaciones?|exportaciones?) (de )?energia/.test(nrm(m.name)));
+  const phys = cat.filter(m => /^enlace$/i.test(m.entity) && /^(impo|expo)ener$/i.test(m.id));
   for (const m of phys) out.push({ pais: paisDe(m.id + ' ' + m.name), dir: /^impo/i.test(m.id) || /^importa/.test(nrm(m.name)) ? 'imp' : 'exp', m, via: 'fisica' });
   if (out.length) return out;
   // 2) TIE (Ecuador) e Int (Venezuela) en bolsa
   const defs = [['Ecuador', 'imp', /^CompBolsaTIEEner$/i, /compras? en bolsa.*tie/], ['Ecuador', 'exp', /^VentBolsaTIEEner$/i, /ventas? en bolsa.*tie/], ['Venezuela', 'imp', /^CompBolsaIntEner$/i, /compras? en bolsa.*(internacional|int\b)/], ['Venezuela', 'exp', /^VentBolsaIntEner$/i, /ventas? en bolsa.*(internacional|int\b)/]];
-  for (const [pais, dir, idRe, nameRe] of defs) { const m = find(idRe, nameRe); if (m) out.push({ pais, dir, m, via: 'bolsa' }); }
+  for (const [pais, dir, idRe, nameRe] of defs) { const m = find(idRe, nameRe, m => /^sistema$/i.test(m.entity)); if (m) out.push({ pais, dir, m, via: 'bolsa' }); }
   return out;
 }
 // Suma por (fecha, país) en MWh (XM entrega kWh). Devuelve Map 'fecha|pais' -> MWh
@@ -31,20 +31,28 @@ export function agregar(items, pais, scale = 1000) {
   return acc;
 }
 const dailyOf = (json, hourly) => hourly
-  ? (json?.Items || []).flatMap(it => (it.HourlyEntities || []).map(ent => ({ date: String(it.Date || '').slice(0, 10), id: ent.Code ?? ent.Values?.code ?? ent.Id ?? '', value: parseHourly({ Items: [{ Date: it.Date, HourlyEntities: [ent] }] }).reduce((a, b) => a + b.value, 0) })))
+  ? (json?.Items || []).flatMap(it => (it.HourlyEntities || []).flatMap(ent => {
+    const values = parseHourly({ Items: [{ Date: it.Date, HourlyEntities: [ent] }] });
+    return values.length ? [{ date: String(it.Date || '').slice(0, 10), id: ent.Values?.code ?? ent.Values?.Code ?? ent.Code ?? ent.Id, value: values.reduce((a, b) => a + b.value, 0) }] : [];
+  }))
   : parseDaily(json);
 export function construir(sel, series, fecha, stamp) {
   const r1 = x => +x.toFixed(1);
   const paises = ['Ecuador', 'Venezuela'].map(pais => {
-    const g = dir => series.filter(s => s.pais === pais && s.dir === dir).reduce((a, s) => a + (s.acc.get(fecha + '|' + pais) || 0), 0);
-    const imp = r1(g('imp')), exp = r1(g('exp'));
-    return { pais, importacion_mwh: imp, exportacion_mwh: exp, saldo_mwh: r1(exp - imp), metricas: sel.filter(s => s.pais === pais).map(s => s.m.id) };
+    const key = fecha + '|' + pais;
+    const g = dir => {
+      const matches = series.filter(s => s.pais === pais && s.dir === dir && s.acc.has(key));
+      return matches.length ? matches.reduce((a, s) => a + s.acc.get(key), 0) : null;
+    };
+    const imp = g('imp'), exp = g('exp');
+    return { pais, importacion_mwh: imp === null ? null : r1(imp), exportacion_mwh: exp === null ? null : r1(exp), saldo_mwh: imp === null || exp === null ? null : r1(exp - imp), metricas: [...new Set(sel.filter(s => s.pais === pais && series.some(t => t.pais === pais && t.m.id === s.m.id && t.acc.has(key))).map(s => s.m.id))] };
   });
   return { source: 'XM', updated_at: stamp, fecha_operacion: fecha, unit: 'MWh', paises };
 }
 
 async function main() {
-  const stamp = new Date().toISOString(), today = new Date(ymd(new Date()) + 'T00:00:00Z');
+  const now = new Date(), stamp = now.toISOString();
+  const today = new Date(ymd(new Date(+now - 5 * 3600000)) + 'T00:00:00Z');
   const file = P('api', 'v1', 'intercambios.json');
   try {
     const sel = elegirMetricas(await cargarCatalogo());
@@ -60,7 +68,7 @@ async function main() {
     }
     // Reexpande métricas sin país fijo (por entidad) en series por país
     const flat = series.flatMap(s => s.pais ? [s] : ['Ecuador', 'Venezuela'].map(pais => ({ ...s, pais })));
-    const fechas = new Set(); flat.forEach(s => s.acc.forEach((v, k) => v !== 0 && fechas.add(k.split('|')[0])));
+    const fechas = new Set(); flat.forEach(s => s.acc.forEach((_, k) => fechas.add(k.split('|')[0])));
     const fecha = [...fechas].sort().pop();
     if (!fecha) throw new Error('Sin datos de intercambios en los últimos 7 días');
     const out = construir(flat.map(s => ({ pais: s.pais, m: s.m })), flat, fecha, stamp);

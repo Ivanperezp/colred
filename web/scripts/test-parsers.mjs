@@ -67,7 +67,10 @@ import { elegirMetricas, agregar, construir, paisDe } from './fetch-intercambios
   assert.equal(sel.length, 3); assert.equal(sel[0].pais, 'Ecuador'); assert.equal(sel[2].pais, 'Venezuela');
   assert.equal(paisDe('Enlace Jamondino-Pomasqui'), 'Ecuador');
   const exp = agregar(parseDaily({ Items: [{ Date: '2026-11-19', DailyEntities: [{ Values: { Value: '2000000' } }] }] }), 'Ecuador');
-  const out = construir(sel, sel.map((s, i) => ({ ...s, acc: i === 1 ? exp : new Map() })), '2026-11-19', 'x');
-  assert.equal(out.paises[0].saldo_mwh, 2000); assert.equal(out.paises[1].saldo_mwh, 0);
+  const zero = new Map([['2026-11-19|Ecuador', 0]]);
+  const out = construir(sel, sel.map((s, i) => ({ ...s, acc: i === 1 ? exp : i === 0 ? zero : new Map() })), '2026-11-19', 'x');
+  assert.equal(out.paises[0].saldo_mwh, 2000); assert.equal(out.paises[1].saldo_mwh, null);
+  const physical = elegirMetricas([...sel.map(s => s.m), { id: 'ExpoEner', entity: 'Sistema' }, { id: 'ExpoEner', entity: 'Enlace' }]);
+  assert.deepEqual(physical.map(s => s.m.entity), ['Enlace']);
 }
 console.log('test-parsers: OK');

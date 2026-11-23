@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { operadoresDe, ZNI, MANUAL } from './operadores';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { completeStationNames } from './nombres-subestaciones';
+import { complementaryLines, complementaryStations } from './red-unificada';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -37,20 +38,30 @@ let sample = false;
 const flagSample = (d: any) => { if (d && (d.sample || d.properties?.sample)) sample = true; };
 const empty: Fc = { type: 'FeatureCollection', features: [] };
 const data: Record<string, Fc> = {};
+type NetworkMode = 'unificada' | 'osm' | 'upme';
+let networkMode: NetworkMode = 'unificada';
+const network: Record<string, Record<NetworkMode, Fc>> = {};
 const load = async () => {
   const names = ['lineas', 'lineas_upme', 'subestaciones', 'subestaciones_upme', 'centrales', 'municipios_centroides', 'departamentos'];
   const res = await Promise.all(names.map(n => tryGet(`data/${n}.geojson`)));
   names.forEach((n, i) => { data[n] = res[i] || empty; flagSample(res[i]); });
-  data.subestaciones = {
-    ...data.subestaciones,
-    features: completeStationNames(data.subestaciones.features, data.subestaciones_upme.features, data.lineas_upme.features),
+  const osmStations = completeStationNames(data.subestaciones.features, data.subestaciones_upme.features, data.lineas_upme.features);
+  const fc = (features: any[]): Fc => ({ type: 'FeatureCollection', features });
+  const officialLines = data.lineas_upme.features, officialStations = data.subestaciones_upme.features;
+  network.lineas = {
+    osm: data.lineas, upme: data.lineas_upme,
+    unificada: fc([...complementaryLines(data.lineas.features, officialLines), ...officialLines]),
+  };
+  network.subestaciones = {
+    osm: fc(osmStations), upme: data.subestaciones_upme,
+    unificada: fc([...complementaryStations(osmStations, officialStations), ...officialStations]),
   };
 };
 
 const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<string, number>)[n] || 0;
-const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas', 'lineas-flujo'], lineas_upme: ['lineas_upme'], subestaciones: ['subestaciones'], subestaciones_upme: ['subestaciones_upme'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
-const labels: Record<string, string> = { lineas: 'Líneas OSM', lineas_upme: 'Líneas UPME', subestaciones: 'Subestaciones OSM', subestaciones_upme: 'Subestaciones UPME', centrales: 'Centrales', alertas: 'Alertas IDEAM', intercambios: 'Intercambios' };
-const on: Record<string, boolean> = { lineas: true, lineas_upme: false, subestaciones: true, subestaciones_upme: false, centrales: true, alertas: true, intercambios: true };
+const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas', 'lineas-flujo'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
+const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM', intercambios: 'Intercambios' };
+const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true, intercambios: true };
 let calidadData: any = null; let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
 
 const alertFc = (): Fc => {
@@ -64,9 +75,9 @@ const addDataLayers = () => {
   const src = (id: string, d: any, extra: object = {}) => { if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: d, ...extra }); };
   const lay = (l: any) => { if (!map.getLayer(l.id)) map.addLayer(l); };
   const hasGlyphs = !!map.getStyle()?.glyphs;
-  src('departamentos', data.departamentos as any, { promoteId: 'cod_dpto' }); src('lineas', data.lineas as any); src('subestaciones', data.subestaciones as any);
-  src('lineas_upme', data.lineas_upme as any, { attribution: 'UPME' });
-  src('subestaciones_upme', data.subestaciones_upme as any, { attribution: 'UPME' });
+  src('departamentos', data.departamentos as any, { promoteId: 'cod_dpto' });
+  src('lineas', network.lineas[networkMode], { attribution: 'UPME' });
+  src('subestaciones', network.subestaciones[networkMode], { attribution: 'UPME' });
   src('centrales', data.centrales as any); src('alertas', alertFc() as any);
   const fb = isFallback;
   lay({ id: 'dept-fill', type: 'fill', source: 'departamentos', paint: { 'fill-color': fb ? '#f7f5ef' : '#2457d6', 'fill-opacity': fb ? 1 : ['case', ['boolean', ['feature-state', 'hover'], false], .1, .035] } });
@@ -81,9 +92,7 @@ const addDataLayers = () => {
   lay({ id: 'lineas', type: 'line', source: 'lineas', filter: ['!=', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': lc, 'line-width': w(2, 1.4, 1) } });
   lay({ id: 'lineas-inferidas', type: 'line', source: 'lineas', filter: ['==', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'butt' }, paint: { 'line-color': lc, 'line-opacity': .8, 'line-width': w(1.6, 1.2, 0.9), 'line-dasharray': [2, 2] } });
   lay({ id: 'lineas-flujo', type: 'line', source: 'lineas', minzoom: 5, filter: ['all', ['>=', kv, 110], ['!=', ['get', 'inferido'], true]], layout: { visibility: on.lineas && flowOn ? 'visible' : 'none', 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': '#fff', 'line-opacity': .6, 'line-width': w(1.2, 0.9, 0.7), 'line-dasharray': DASH[0] } });
-  lay({ id: 'lineas_upme', type: 'line', source: 'lineas_upme', layout: { ...vis('lineas_upme'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': UPME_COLOR, 'line-width': w(3, 2.5, 2) } });
-  lay({ id: 'subestaciones', type: 'circle', source: 'subestaciones', minzoom: 5, layout: vis('subestaciones'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 6], 'circle-color': '#fff', 'circle-stroke-color': '#14202e', 'circle-stroke-width': 1.6 } });
-  lay({ id: 'subestaciones_upme', type: 'circle', source: 'subestaciones_upme', minzoom: 5, layout: vis('subestaciones_upme'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 3, 10, 7], 'circle-color': UPME_COLOR, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.4 } });
+  lay({ id: 'subestaciones', type: 'circle', source: 'subestaciones', minzoom: 5, layout: vis('subestaciones'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 6], 'circle-color': ['case', ['==', ['get', 'fuente'], 'UPME'], UPME_COLOR, '#fff'], 'circle-stroke-color': '#14202e', 'circle-stroke-width': 1.6 } });
   const tc: any[] = ['match', ['get', 'tecnologia']]; Object.entries(TECH).forEach(([k, v]) => tc.push(k, v)); tc.push('#8a5fb5');
   const mw: any = ['to-number', ['get', 'mw'], 0];
   lay({ id: 'centrales', type: 'circle', source: 'centrales', layout: vis('centrales'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, ['+', 3, ['*', .17, ['sqrt', mw]]], 9, ['+', 5, ['*', .4, ['sqrt', mw]]]], 'circle-color': tc as any, 'circle-opacity': .92, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.8 } });
@@ -113,27 +122,36 @@ document.addEventListener('visibilitychange', () => { if (map) applyFlow(); });
 const ARROW_AT: Record<string, [number, number]> = { Ecuador: [-77.64, 0.81], Venezuela: [-72.3, 11.0] };
 const ARROW_DIR: Record<string, number> = { Ecuador: 205, Venezuela: 75 }; // grados de la flecha "saliendo" de Colombia (0 = norte)
 let intercambios: any = null; const ixMarkers: maplibregl.Marker[] = [];
-const ixPaises = () => (intercambios?.paises || []).filter((p: any) => ARROW_AT[p.pais] && (Number(p.importacion_mwh) || Number(p.exportacion_mwh)));
-const ixText = (p: any) => { const s = Number(p.saldo_mwh) || 0; return `${p.pais} · ${s > 0 ? 'exporta ' : s < 0 ? 'importa ' : 'saldo '}${fmt(Math.abs(s))} MWh`; };
+const ixPaises = () => Object.keys(ARROW_AT).map(pais =>
+  intercambios?.paises?.find((p: any) => p.pais === pais) || { pais, saldo_mwh: null });
+const ixBalance = (p: any) => {
+  const s = p.saldo_mwh;
+  if (!Number.isFinite(s)) return 'Sin dato de saldo';
+  return `${s > 0 ? 'Exporta ' : s < 0 ? 'Importa ' : 'Saldo '}${fmt(Math.abs(s), 1)} MWh`;
+};
+const ixDate = () => intercambios?.fecha_operacion
+  ? new Date(intercambios.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+  : '';
 const addIxMarkers = () => {
-  ixPaises().forEach((p: any) => {
+  ixPaises().filter((p: any) => p.pais === 'Ecuador' || Number.isFinite(p.saldo_mwh)).forEach((p: any) => {
     const s = Number(p.saldo_mwh) || 0, ang = ARROW_DIR[p.pais] + (s < 0 ? 180 : 0);
     const el = document.createElement('div'); el.className = 'ix';
-    el.innerHTML = `<i style="transform:rotate(${ang}deg)">${s ? '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</i><span><b>${esc(p.pais)}</b> ${s > 0 ? 'exporta' : s < 0 ? 'importa' : 'saldo'} ${fmt(Math.abs(s))} MWh</span>`;
-    el.setAttribute('role', 'img'); el.setAttribute('aria-label', ixText(p));
+    el.classList.toggle('ix-empty', !s);
+    const date = Number.isFinite(p.saldo_mwh) && ixDate() ? ` · ${ixDate()}` : '';
+    el.innerHTML = `<i style="transform:rotate(${ang}deg)">${s ? '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</i><span><b>${esc(p.pais)}</b> · ${ixBalance(p)}${date}</span>`;
+    el.setAttribute('role', 'img'); el.setAttribute('aria-label', `${p.pais} · ${ixBalance(p)}${date}`);
     ixMarkers.push(new maplibregl.Marker({ element: el, anchor: 'left', offset: [-12, 0] }).setLngLat(ARROW_AT[p.pais]).addTo(map));
   });
 };
 const setIx = () => ixMarkers.forEach(m => { m.getElement().style.display = on.intercambios ? '' : 'none'; });
 const ixCard = () => {
-  const ps = ixPaises(); if (!ps.length) return '';
-  const fecha = intercambios.fecha_operacion ? ' · ' + new Date(intercambios.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
-  const rows = ps.map((p: any) => { const s = Number(p.saldo_mwh) || 0; return `<div class="sg"><span>${esc(p.pais)}</span><b class="${s < 0 ? 'dn' : ''}">${s > 0 ? 'Exporta ' : s < 0 ? 'Importa ' : 'Saldo '}${fmt(Math.abs(s))} MWh</b></div>`; }).join('');
-  return card('intercambios', `Intercambios internacionales${fecha}`, `${rows}<div class="note">Saldo del día entre Colombia y otro país.</div>${foot('xm', 'XM', intercambios.updated_at)}`);
+  const fecha = ixDate() ? ' · ' + ixDate() : '';
+  const rows = ixPaises().map((p: any) => `<div class="sg"><span>${esc(p.pais)}</span><b class="${p.saldo_mwh < 0 ? 'dn' : ''}">${ixBalance(p)}</b></div>`).join('');
+  return card('intercambios', `Intercambios internacionales${fecha}`, `${rows}<div class="note">Saldo de Colombia en el último día disponible.</div>${foot('xm_intercambios', 'XM', intercambios?.updated_at)}`);
 };
 
 const popupHtml: Record<string, (p: any) => string> = {
-  lineas: p => `<div class="pp"><b>${esc(p.name || 'Línea de transmisión')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Tensión desconocida'}</div>${errLink(p.name || 'Línea de transmisión')}</div>`,
+  lineas: p => p.fuente === 'UPME' ? popupHtml.lineas_upme(p) : `<div class="pp"><b>${esc(p.name || 'Línea de transmisión')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Tensión desconocida'}</div><div class="m">Fuente: OpenStreetMap</div>${errLink(p.name || 'Línea de transmisión')}</div>`,
   'lineas-inferidas': p => `<div class="pp"><b>Tramo inferido</b><div class="m">${esc(p.tension_kv)} kV</div><div class="m">Unión estimada entre extremos de líneas de OpenStreetMap.</div>${errLink('Tramo inferido')}</div>`,
   lineas_upme: p => {
     const name = p.nombre || p.name || 'Línea de transmisión';
@@ -147,7 +165,7 @@ const popupHtml: Record<string, (p: any) => string> = {
     ];
     return `<div class="pp"><b>${esc(name)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}${errLink(name)}</div>`;
   },
-  subestaciones: p => `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b>${p.tension_kv && p.tension_kv !== 'null' ? `<div class="m">${esc(p.tension_kv)} kV</div>` : ''}${p.fuente_nombre === 'UPME' ? '<div class="m">Nombre según UPME</div>' : ''}${!p.nombre && !p.name ? '<div class="m">Sin nombre registrado</div>' : ''}${errLink(p.nombre || p.name || 'Subestación')}</div>`,
+  subestaciones: p => p.fuente === 'UPME' ? popupHtml.subestaciones_upme(p) : `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b>${p.tension_kv && p.tension_kv !== 'null' ? `<div class="m">${esc(p.tension_kv)} kV</div>` : ''}${p.fuente_nombre === 'UPME' ? '<div class="m">Nombre según UPME</div>' : ''}${!p.nombre && !p.name ? '<div class="m">Sin nombre registrado</div>' : ''}<div class="m">Ubicación: OpenStreetMap</div>${errLink(p.nombre || p.name || 'Subestación')}</div>`,
   subestaciones_upme: p => {
     const location = [p.municipio, p.departamento].filter(Boolean).join(', ');
     const details = [p.sistema, p.tension_kv && `${p.tension_kv} kV`, location, p.propietario, 'Fuente: UPME'];
@@ -156,8 +174,8 @@ const popupHtml: Record<string, (p: any) => string> = {
   centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div>${errLink(p.nombre)}</div>`,
   alertas: p => `<div class="pp"><b>${esc(p.municipio)}</b><div class="m">${esc(p.departamento)}</div><div class="m">Alerta ${esc(p.nivel)} · ${esc(p.tipo)}</div><div class="m">${esc(p.texto)}</div></div>`,
 };
-const LINE_HIT = ['lineas_upme', 'lineas', 'lineas-inferidas'];
-const HIT = ['alertas', 'centrales', 'subestaciones_upme', 'subestaciones', ...LINE_HIT];
+const LINE_HIT = ['lineas', 'lineas-inferidas'];
+const HIT = ['alertas', 'centrales', 'subestaciones', ...LINE_HIT];
 
 // ---------- Ficha de departamento ----------
 const inRing = (pt: number[], r: number[][]) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
@@ -212,9 +230,6 @@ const initMap = (style: StyleSpecification | null) => {
 const buildChips = () => {
   const box = $('chips');
   Object.keys(groups).filter(k => labels[k]).forEach(k => {
-    if (k === 'intercambios' && !ixPaises().length) return;
-    if (k === 'lineas_upme' && !data.lineas_upme.features.length) return;
-    if (k === 'subestaciones_upme' && !data.subestaciones_upme.features.length) return;
     const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = labels[k]; b.setAttribute('aria-pressed', String(on[k]));
     b.onclick = () => { on[k] = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on[k])); groups[k].forEach(l => map.getLayer(l) && map.setLayoutProperty(l, 'visibility', on[k] ? 'visible' : 'none')); if (k === 'lineas') applyFlow(); if (k === 'intercambios') setIx(); };
     box.append(b);
@@ -227,16 +242,26 @@ const buildLegend = () => {
   const upmeDate = syncedDate && Number.isFinite(+syncedDate)
     ? ` · descarga del ${syncedDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}`
     : '';
-  $('legend-body').innerHTML = `<div class="lg"><h3>Líneas OSM por tensión</h3>${LINE_C.map(([t, c], i) => row(c, t, false, [4, 3, 2, 2][i])).join('')}
+  $('legend-body').innerHTML = `<div class="lg"><label for="network-source">Fuente de la red</label>
+  <select id="network-source"><option value="unificada">Vista unificada</option><option value="osm">OpenStreetMap</option><option value="upme">UPME</option></select>
+  <h3>Líneas por tensión</h3>${LINE_C.map(([t, c], i) => row(c, t, false, [4, 3, 2, 2][i])).join('')}
   <span class="src">Los trazos punteados son uniones estimadas.</span>
-  ${data.lineas_upme.features.length ? row(UPME_COLOR, 'Líneas UPME · ' + (data.lineas_upme.features.some(f => f.properties.sistema === 'STR') ? 'STN y STR' : 'STN') + upmeDate) : ''}
+  ${data.lineas_upme.features.length ? `<span class="src">Trazados UPME${upmeDate}</span>` : ''}
   <h3>Centrales por tecnología</h3>${Object.entries(TECH).map(([t, c]) => row(c, t, true)).join('')}<span class="src">Tamaño según potencia (MW); punto pequeño = sin dato</span>
   <h3>Subestaciones</h3><div><span class="dot" style="background:#fff;border:2px solid #14202e;box-shadow:none"></span>OpenStreetMap</div>
   ${data.subestaciones_upme.features.length ? row(UPME_COLOR, 'UPME', true) : ''}
   ${alertasData ? '<h3>Alertas IDEAM</h3>' : ''}${!alertasData ? '' : Object.entries(LVL).map(([t, c]) => row(c, t[0].toUpperCase() + t.slice(1), true)).join('')}
-  ${ixPaises().length ? '<h3>Intercambios</h3><div><svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" style="margin-right:8px;flex:none"><path d="M1 6H15" stroke="#0b6e4f" stroke-width="3"/><path d="M13 1L21 6L13 11Z" fill="#0b6e4f"/></svg>Saldo del día con otro país</div>' : ''}
+  <h3>Intercambios</h3><div><svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" style="margin-right:8px;flex:none"><path d="M1 6H15" stroke="#0b6e4f" stroke-width="3"/><path d="M13 1L21 6L13 11Z" fill="#0b6e4f"/></svg>Sentido del saldo publicado</div>
   <h3>Animación</h3><label class="sw-t"><input type="checkbox" id="flow-t" role="switch" ${flowOn ? 'checked' : ''}><span>Animación de corriente</span></label><span class="src">La animación es ilustrativa; no indica el sentido real del flujo.</span>
   <span class="src" style="margin-top:10px">Fuentes: XM, UPME, DANE y OpenStreetMap.</span></div>`;
+  const source = $<HTMLSelectElement>('network-source');
+  source.options[2].disabled = !data.lineas_upme.features.length && !data.subestaciones_upme.features.length;
+  source.onchange = () => {
+    networkMode = source.value as NetworkMode;
+    for (const id of ['lineas', 'subestaciones']) {
+      map?.getSource<maplibregl.GeoJSONSource>(id)?.setData(network[id][networkMode] as any);
+    }
+  };
 };
 
 // ---------- Tarjetas nacionales ----------
@@ -245,10 +270,10 @@ const precioDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota',
 const precioDate = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium' });
 const precioDateTime = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
 const meta = { v: null as any };
-const foot = (name: 'xm' | 'ideam', label: string, upd?: string) => {
+const foot = (name: 'xm' | 'ideam' | 'xm_intercambios', label: string, upd?: string) => {
   const m = meta.v?.sources?.[name]; const bad = m && m.status !== 'ok';
   const old = upd && Date.now() - +new Date(upd) > 6 * 3600e3;
-  return `<div class="src">Fuente: ${label} · actualizado ${hhmm(upd)}</div>` + (bad ? `<div class="warn" role="alert">Sin datos nuevos de ${label} desde ${hhmm(m.last_ok)}</div>` : old ? `<div class="warn" role="alert">Datos con más de 6 horas de antigüedad</div>` : '');
+  return `<div class="src">Fuente: ${label}${upd ? ' · actualizado ' + hhmm(upd) : ''}</div>` + (bad ? `<div class="warn" role="alert">Sin datos nuevos de ${label}${m.last_ok ? ' desde ' + hhmm(m.last_ok) : ''}</div>` : old ? `<div class="warn" role="alert">Datos con más de 6 horas de antigüedad</div>` : '');
 };
 const spark = (v: number[], label: string) => {
   if (v.length < 2) return '';

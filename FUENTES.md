@@ -23,9 +23,11 @@ Ejecutar en tu PC (Node 18+): `cd web && npm run datos:oficiales` (o cada `datos
 
 ## Cobertura en el mapa
 
-La capa opcional **Subestaciones UPME** muestra puntos del inventario oficial de subestaciones construidas STN y STR. Los registros pueden representar distintos niveles de tensión de un mismo predio. Las fichas OSM conservan sus nombres y solo se completan cuando hay una coincidencia única.
+La vista unificada muestra el inventario UPME y los datos complementarios de OpenStreetMap. Un trazado OSM se omite de la vista unificada si coincide a lo largo de su recorrido con un mismo trazado UPME de igual tensión. Un punto OSM se omite si hay una coincidencia cercana y sin conflicto de nombre o tensión. El selector **Fuente de la red** de la leyenda permite consultar cada inventario.
 
-El mapa ofrece una capa opcional de líneas construidas STN y STR de UPME a partir de `web/public/data/lineas_upme.geojson`. La leyenda muestra la fecha de descarga. La ficha muestra el circuito, la tensión, las subestaciones de inicio y fin, el propietario y la vigencia cuando están disponibles. Los trazos punteados de la capa OpenStreetMap son uniones estimadas entre tramos.
+La leyenda muestra la fecha de descarga de las líneas UPME. Cada ficha indica su fuente. Los trazos punteados de OpenStreetMap representan uniones estimadas entre tramos.
+
+Para los intercambios internacionales, ColRed consulta las métricas horarias `ImpoEner` y `ExpoEner` de XM por enlace, en kWh, y publica el total diario en MWh. El saldo corresponde a exportaciones menos importaciones de Colombia cuando hay datos de ambas direcciones.
 
 El importador usa la [capa de líneas construidas STN y STR](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/Sistema_transmision_lineas_construidas/FeatureServer/17) del geoportal UPME. Los marcadores de subestaciones OSM pueden representar el centro de un predio y los circuitos pueden terminar en su borde. La [capa de líneas de convocatorias](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/convocatorias_lineas_transmision/MapServer/1) corresponde a proyectos y queda fuera de la capa de líneas construidas.
 
