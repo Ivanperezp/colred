@@ -3,6 +3,7 @@ import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { operadoresDe, ZNI, MANUAL } from './operadores';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import { completeStationNames } from './nombres-subestaciones';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -37,9 +38,13 @@ const flagSample = (d: any) => { if (d && (d.sample || d.properties?.sample)) sa
 const empty: Fc = { type: 'FeatureCollection', features: [] };
 const data: Record<string, Fc> = {};
 const load = async () => {
-  const names = ['lineas', 'lineas_upme', 'subestaciones', 'centrales', 'municipios_centroides', 'departamentos'];
+  const names = ['lineas', 'lineas_upme', 'subestaciones', 'subestaciones_upme', 'centrales', 'municipios_centroides', 'departamentos'];
   const res = await Promise.all(names.map(n => tryGet(`data/${n}.geojson`)));
   names.forEach((n, i) => { data[n] = res[i] || empty; flagSample(res[i]); });
+  data.subestaciones = {
+    ...data.subestaciones,
+    features: completeStationNames(data.subestaciones.features, data.subestaciones_upme.features, data.lineas_upme.features),
+  };
 };
 
 const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<string, number>)[n] || 0;
@@ -140,7 +145,7 @@ const popupHtml: Record<string, (p: any) => string> = {
     ];
     return `<div class="pp"><b>${esc(name)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}${errLink(name)}</div>`;
   },
-  subestaciones: p => `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Subestación'}</div>${errLink(p.nombre || p.name || 'Subestación')}</div>`,
+  subestaciones: p => `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b>${p.tension_kv && p.tension_kv !== 'null' ? `<div class="m">${esc(p.tension_kv)} kV</div>` : ''}${p.fuente_nombre === 'UPME' ? '<div class="m">Nombre según UPME</div>' : ''}${!p.nombre && !p.name ? '<div class="m">Sin nombre registrado</div>' : ''}${errLink(p.nombre || p.name || 'Subestación')}</div>`,
   centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div>${errLink(p.nombre)}</div>`,
   alertas: p => `<div class="pp"><b>${esc(p.municipio)}</b><div class="m">${esc(p.departamento)}</div><div class="m">Alerta ${esc(p.nivel)} · ${esc(p.tipo)}</div><div class="m">${esc(p.texto)}</div></div>`,
 };
