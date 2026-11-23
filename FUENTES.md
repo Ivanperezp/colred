@@ -28,11 +28,15 @@ La vista unificada muestra el inventario UPME y los datos complementarios de Ope
 
 La leyenda muestra la fecha de descarga de las líneas UPME. Cada ficha indica su fuente. Al seleccionar una línea UPME se resaltan sus trazados con el mismo nombre, tensión y subestaciones terminales. Para OpenStreetMap se resalta el tramo seleccionado.
 
+La ficha de subestación agrupa registros UPME del mismo nombre y municipio cuando están a menos de 200 m del punto representativo. Lista los circuitos que la UPME identifica por nombre de extremo y cuyo trazado termina cerca del sitio. Si hay varios sitios con el mismo nombre, solo se usa una coincidencia espacial clara. El listado refleja el inventario disponible y puede ser incompleto.
+
 La vista principal dibuja trazados de ambas fuentes. Las uniones estimadas del archivo de OpenStreetMap se conservan como insumo de revisión y se excluyen de las capas visibles.
 
 `predios_subestaciones.geojson` muestra los contornos cerrados que OpenStreetMap etiqueta como subestaciones. La descarga inicial cubre el piloto Manizales–La Enea. `datos:osm` amplía la capa con los predios disponibles en la consulta nacional. Los predios se dibujan al acercar el mapa; las coordenadas de los trazados y de los marcadores no se modifican.
 
 Para los intercambios internacionales, ColRed consulta las métricas horarias `ImpoEner` y `ExpoEner` de XM por enlace, en kWh, y publica el total diario en MWh. El saldo corresponde a exportaciones menos importaciones de Colombia cuando hay datos de ambas direcciones.
+
+El historial consulta los últimos 14 días calendario para `PrecBolsNaci` y `Gene`. Conserva el formato anterior del último día en cada archivo y añade `historico` con los días disponibles. Ambas tarjetas usan la misma fecha de operación y el mismo horario de Colombia. La tabla distingue horas sin dato de valores de cero.
 
 El importador usa la [capa de líneas construidas STN y STR](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/Sistema_transmision_lineas_construidas/FeatureServer/17) del geoportal UPME. Los marcadores de subestaciones OSM pueden representar el centro de un predio y los circuitos pueden terminar en su borde. La [capa de líneas de convocatorias](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/convocatorias_lineas_transmision/MapServer/1) corresponde a proyectos y queda fuera de la capa de líneas construidas.
 

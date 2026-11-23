@@ -1,6 +1,6 @@
-// Generación por tecnología del último día disponible (XM: Gene por recurso + ListadoRecursos).
+// Historial de generación por tecnología (XM: Gene por recurso + ListadoRecursos).
 // Uso: node scripts/fetch-mix.mjs
-import { P, writeJsonAtomic, ymd, addDays, updateMeta } from './lib.mjs';
+import { P, readJson, writeJsonAtomic, ymd, addDays, updateMeta, HISTORIAL_DIAS, fechaColombia, combinarHistorial } from './lib.mjs';
 import { xm } from './fetch-xm.mjs';
 import { cargarCatalogo, cargarRecursos, pickMetric } from './xm-catalogo.mjs';
 
@@ -44,13 +44,17 @@ export function construirMix(day, fecha, stamp) {
   return {
     source: 'XM', updated_at: stamp, fecha_operacion: fecha, unit: 'MWh', total_mwh: r1(total),
     por_tecnologia: orden.filter(k => day.fine[k] > 0).map(k => ({ tecnologia: k, mwh: r1(day.fine[k]), pct: +(100 * day.fine[k] / total).toFixed(1) })),
-    horario: day.horas.map((o, i) => ({ hora: i + 1, Hidráulica: r1(o['Hidráulica'] || 0), Térmica: r1(o['Térmica'] || 0), Solar: r1(o['Solar'] || 0), Eólica: r1(o['Eólica'] || 0), Otras: r1(o['Otras'] || 0) })),
+    horas_con_datos: day.horas.filter(o => Object.keys(o).length).length,
+    horario: day.horas.map((o, i) => Object.keys(o).length
+      ? { hora: i + 1, Hidráulica: r1(o['Hidráulica'] || 0), Térmica: r1(o['Térmica'] || 0), Solar: r1(o['Solar'] || 0), Eólica: r1(o['Eólica'] || 0), Otras: r1(o['Otras'] || 0) }
+      : { hora: i + 1 }),
   };
 }
 
 async function main() {
   const now = new Date(), stamp = now.toISOString();
-  const today = new Date(ymd(new Date(+now - 5 * 3600000)) + 'T00:00:00Z');
+  const today = new Date(fechaColombia(now) + 'T00:00:00Z');
+  const since = ymd(addDays(today, 1 - HISTORIAL_DIAS));
   const file = P('api', 'v1', 'generacion.json');
   try {
     let id = 'Gene';
@@ -61,17 +65,14 @@ async function main() {
     console.log('Métrica de generación:', id);
     const recursos = await cargarRecursos();
     if (!recursos.size) throw new Error('ListadoRecursos vacío');
-    let done = null;
-    for (let k = 1; k <= 4 && !done; k++) { // del día más reciente hacia atrás
-      const f = ymd(addDays(today, -k));
-      const j = await xm('hourly', { MetricId: id, StartDate: f, EndDate: f, Entity: 'Recurso', Filter: [] });
-      const day = agregarGeneracion(j, recursos)[f];
-      if (day && day.n > 0) done = { f, day };
-    }
-    if (!done) throw new Error('Sin datos de generación en los últimos 4 días');
-    const out = construirMix(done.day, done.f, stamp);
+    const j = await xm('hourly', { MetricId: id, StartDate: since, EndDate: ymd(today), Entity: 'Recurso', Filter: [] });
+    const days = Object.entries(agregarGeneracion(j, recursos)).filter(([, day]) => day.n > 0)
+      .map(([fecha, day]) => construirMix(day, fecha, stamp));
+    if (!days.length) throw new Error('Sin datos de generación en el periodo consultado');
+    const historico = combinarHistorial(readJson(file), days, since, day => day.horas_con_datos ?? day.horario?.length ?? 0);
+    const out = { ...historico.at(-1), historico };
     writeJsonAtomic(file, out);
-    console.log(`OK  generacion ${done.f}: ${out.total_mwh} MWh, ${out.por_tecnologia.length} tecnologías`);
+    console.log(`OK  generacion ${out.fecha_operacion}: ${out.total_mwh} MWh, ${historico.length} días`);
     updateMeta('xm_mix', 'ok');
   } catch (e) { console.error('ERR generacion:', e.message, '(se conserva el archivo anterior)'); try { updateMeta('xm_mix', 'error'); } catch {} process.exit(1); }
 }

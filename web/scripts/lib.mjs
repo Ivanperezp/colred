@@ -44,6 +44,19 @@ export function titleCase(s) {
 
 export const ymd = d => d.toISOString().slice(0, 10);
 export const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
+export const HISTORIAL_DIAS = 14;
+export const fechaColombia = d => ymd(new Date(+new Date(d) - 5 * 3600000));
+
+export function combinarHistorial(cached, days, since, size) {
+  const previous = cached?.sample ? [] : cached?.historico || (cached?.fecha_operacion ? [cached] : []);
+  const byDate = new Map();
+  for (const { historico: _history, ...day } of [...previous, ...days]) {
+    if (!day.fecha_operacion || day.fecha_operacion < since || !size(day)) continue;
+    const existing = byDate.get(day.fecha_operacion);
+    if (!existing || size(day) >= size(existing)) byDate.set(day.fecha_operacion, day);
+  }
+  return [...byDate.values()].sort((a, b) => a.fecha_operacion.localeCompare(b.fecha_operacion));
+}
 
 export function updateMeta(key, status, extra = {}) {
   const f = P('api', 'v1', 'meta.json');

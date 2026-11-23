@@ -1,6 +1,6 @@
 // Demanda, precio de bolsa y embalses desde la API pública de XM (servapibi.xm.com.co).
 // Uso: node scripts/fetch-xm.mjs
-import { P, readJson, writeJsonAtomic, fetchJson, ymd, addDays, updateMeta } from './lib.mjs';
+import { P, readJson, writeJsonAtomic, fetchJson, ymd, addDays, updateMeta, HISTORIAL_DIAS, fechaColombia, combinarHistorial } from './lib.mjs';
 
 const BASE = 'https://servapibi.xm.com.co';
 export async function xm(endpoint, body) {
@@ -56,8 +56,7 @@ export function pctSeries(vol, cap) {
 }
 
 async function main() {
-  const dayCo = t => ymd(new Date(+new Date(t) - 5 * 3600000));
-  const now = new Date(), today = new Date(dayCo(now) + 'T00:00:00Z');
+  const now = new Date(), today = new Date(fechaColombia(now) + 'T00:00:00Z');
   const stamp = now.toISOString();
   const jobs = {};
 
@@ -68,13 +67,22 @@ async function main() {
     return { source: 'XM', updated_at: stamp, unit: 'MWh', series };
   };
   jobs.precio_bolsa = async () => {
-    const j = await xm('hourly', { MetricId: 'PrecBolsNaci', StartDate: ymd(addDays(today, -7)), EndDate: ymd(today), Entity: 'Sistema', Filter: [] });
+    const since = ymd(addDays(today, 1 - HISTORIAL_DIAS));
+    const j = await xm('hourly', { MetricId: 'PrecBolsNaci', StartDate: since, EndDate: ymd(today), Entity: 'Sistema', Filter: [] });
     const all = parseHourly(j, 1); // ya en COP/kWh
     if (!all.length) throw new Error('PrecBolsNaci sin datos');
-    const ld = dayCo(all[all.length - 1].ts);
+    const byDay = new Map();
+    for (const point of all) {
+      const date = fechaColombia(point.ts);
+      if (!byDay.has(date)) byDay.set(date, new Map());
+      byDay.get(date).set(point.ts, point);
+    }
     const cached = readJson(P('api', 'v1', 'precio_bolsa.json'));
-    if (!cached?.sample && cached?.series?.at(-1)?.ts > all.at(-1).ts) throw new Error('PrecBolsNaci devolvió un periodo anterior al ya guardado');
-    return { source: 'XM', updated_at: stamp, unit: 'COP/kWh', fecha_operacion: ld, series: all.filter(x => dayCo(x.ts) === ld) };
+    const days = [...byDay].map(([fecha_operacion, hours]) => ({
+      source: 'XM', updated_at: stamp, unit: 'COP/kWh', fecha_operacion, series: [...hours.values()],
+    }));
+    const historico = combinarHistorial(cached, days, since, day => day.series?.length || 0);
+    return { ...historico.at(-1), historico };
   };
   jobs.embalses = async () => {
     const start = addDays(today, -60);

@@ -5,6 +5,8 @@ import { operadoresDe, ZNI, MANUAL } from './operadores';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { completeStationNames } from './nombres-subestaciones';
 import { circuitKey, complementaryLines, complementaryStations } from './red-unificada';
+import { stationSites, type StationSite } from './fichas-subestaciones';
+import { mountHistory } from './historial-xm';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -44,6 +46,7 @@ let networkMode: NetworkMode = 'unificada';
 const network: Record<string, Record<NetworkMode, Fc>> = {};
 let selectedCircuit = '';
 let mapPopup: maplibregl.Popup | undefined;
+let stationsById = new Map<string, StationSite>();
 const load = async () => {
   const names = ['lineas', 'lineas_upme', 'subestaciones', 'subestaciones_upme', 'predios_subestaciones', 'centrales', 'municipios_centroides', 'departamentos'];
   const res = await Promise.all(names.map(n => tryGet(`data/${n}.geojson`)));
@@ -54,6 +57,12 @@ const load = async () => {
   });
   const officialLines = data.lineas_upme.features.map((f, i) => withCircuit(f, i, 'upme'));
   const officialStations = data.subestaciones_upme.features;
+  const { sites, nearbySite } = stationSites(officialStations, officialLines);
+  stationsById = sites;
+  const stationPoint = (point: any, site?: StationSite) => ({
+    ...point, properties: { ...point.properties, ficha_subestacion: site?.id || null },
+  });
+  const officialPoints = [...sites.values()].map(site => stationPoint(site.representative, site));
   const osmLines = data.lineas.features.filter(f => !f.properties.inferido);
   const complementary = complementaryLines(osmLines, officialLines);
   network.lineas = {
@@ -62,8 +71,9 @@ const load = async () => {
     unificada: collection([...complementary.map((f, i) => withCircuit(f, i, 'osm')), ...officialLines]),
   };
   network.subestaciones = {
-    osm: collection(osmStations), upme: data.subestaciones_upme,
-    unificada: collection([...complementaryStations(osmStations, officialStations), ...officialStations]),
+    osm: collection(osmStations.map(f => stationPoint(f, nearbySite(f)))),
+    upme: collection(officialPoints),
+    unificada: collection([...complementaryStations(osmStations, officialStations).map(f => stationPoint(f, nearbySite(f))), ...officialPoints]),
   };
 };
 
@@ -76,6 +86,14 @@ const footprintVisibility = () => on.subestaciones && networkMode !== 'upme' ? '
 const selectCircuit = (key = '') => {
   selectedCircuit = key;
   if (map?.getLayer('lineas-seleccion')) map.setFilter('lineas-seleccion', ['==', ['get', 'circuito_mapa'], key]);
+};
+const setNetworkMode = (mode: NetworkMode) => {
+  networkMode = mode;
+  $<HTMLSelectElement>('network-source').value = mode;
+  for (const id of ['lineas', 'subestaciones']) {
+    map?.getSource<maplibregl.GeoJSONSource>(id)?.setData(network[id][mode] as any);
+  }
+  updateFootprintVisibility();
 };
 const updateFootprintVisibility = () => {
   for (const layer of ['predios-relleno', 'predios-borde']) {
@@ -187,11 +205,23 @@ const popupHtml: Record<string, (p: any) => string> = {
     ];
     return `<div class="pp"><b>${esc(name)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}${errLink(name)}</div>`;
   },
-  subestaciones: p => p.fuente === 'UPME' ? popupHtml.subestaciones_upme(p) : `<div class="pp"><b>${esc(p.nombre || p.name || 'Subestación')}</b>${p.tension_kv && p.tension_kv !== 'null' ? `<div class="m">${esc(p.tension_kv)} kV</div>` : ''}${p.fuente_nombre === 'UPME' ? '<div class="m">Nombre según UPME</div>' : ''}${!p.nombre && !p.name ? '<div class="m">Sin nombre registrado</div>' : ''}<div class="m">Ubicación: OpenStreetMap</div>${errLink(p.nombre || p.name || 'Subestación')}</div>`,
-  subestaciones_upme: p => {
-    const location = [p.municipio, p.departamento].filter(Boolean).join(', ');
-    const details = [p.sistema, p.tension_kv && `${p.tension_kv} kV`, location, p.propietario, 'Fuente: UPME'];
-    return `<div class="pp"><b>${esc(p.nombre)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}${errLink(p.nombre)}</div>`;
+  subestaciones: p => {
+    const site = stationsById.get(p.ficha_subestacion);
+    const official = site?.representative.properties;
+    const name = site?.name || p.nombre || p.name || 'Subestación';
+    const levels = site?.voltages.length ? site.voltages : Number(p.tension_kv) > 0 ? [Number(p.tension_kv)] : [];
+    const location = [official?.municipio, official?.departamento].filter(Boolean).join(', ');
+    const details = [
+      levels.length ? levels.map(v => `${fmt(v, 1)} kV`).join(' · ') : 'Tensión sin registrar',
+      location, official?.propietario,
+      p.fuente === 'UPME' ? 'Fuente: UPME' : 'Ubicación: OpenStreetMap',
+      p.fuente !== 'UPME' && (site || p.fuente_nombre === 'UPME') ? 'Nombre según UPME' : '',
+      !p.nombre && !p.name && !site ? 'Sin nombre registrado' : '',
+    ];
+    const circuits = site?.circuits.length
+      ? `<ul class="station-circuits">${site.circuits.map((c, i) => `<li><button type="button" data-circuit="${i}" aria-pressed="false">${esc(c.name)}</button></li>`).join('')}</ul>`
+      : '<div class="m">ColRed no tiene circuitos UPME verificados para este sitio.</div>';
+    return `<div class="pp"><b>${esc(name)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}<h3>Circuitos registrados por UPME</h3>${circuits}${errLink(name)}</div>`;
   },
   centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div>${errLink(p.nombre)}</div>`,
   alertas: p => `<div class="pp"><b>${esc(p.municipio)}</b><div class="m">${esc(p.departamento)}</div><div class="m">Alerta ${esc(p.nivel)} · ${esc(p.tipo)}</div><div class="m">${esc(p.texto)}</div></div>`,
@@ -225,6 +255,22 @@ const openFicha = (f: any, fit = true) => {
 };
 const closeFicha = () => { $('ficha').hidden = true; document.body.classList.remove('sheet'); if (map.getLayer('dept-sel')) map.setFilter('dept-sel', ['==', ['get', 'cod_dpto'], '']); };
 
+const bindStationCircuits = (popup: maplibregl.Popup, site: StationSite) => {
+  const buttons = popup.getElement().querySelectorAll<HTMLButtonElement>('[data-circuit]');
+  buttons.forEach(button => {
+    button.onclick = () => {
+      const circuit = site.circuits[Number(button.dataset.circuit)];
+      if (!circuit) return;
+      if (networkMode === 'osm') setNetworkMode('unificada');
+      if (!on.lineas) $('chip-lineas').click();
+      selectCircuit(circuit.key);
+      buttons.forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+      const compact = matchMedia('(max-width:720px)').matches;
+      map.fitBounds(circuit.bounds, { padding: compact ? 44 : { top: 90, bottom: 52, left: 72, right: 330 }, maxZoom: 12, duration: 550 });
+    };
+  });
+};
+
 const initMap = (style: StyleSpecification | null) => {
   isFallback = !style;
   map = new maplibregl.Map({ container: 'map', style: style || fallbackStyle, center: [-73.8, 5.2], zoom: matchMedia('(max-width:720px)').matches ? 4.3 : 5.2, minZoom: 3.5, attributionControl: false });
@@ -241,7 +287,7 @@ const initMap = (style: StyleSpecification | null) => {
   });
   map.on('click', e => {
     const pad = 5, feats = map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: HIT.filter(l => map.getLayer(l)) });
-    const f = feats[0];
+    const f = feats.find(feature => feature.layer.id === 'subestaciones') || feats[0];
     mapPopup?.remove();
     if (f) {
       const lid = f.layer.id;
@@ -252,6 +298,8 @@ const initMap = (style: StyleSpecification | null) => {
         .addTo(map);
       mapPopup = popup;
       popup.on('close', () => { mapPopup = undefined; selectCircuit(); });
+      const site = lid === 'subestaciones' && stationsById.get(f.properties.ficha_subestacion);
+      if (site) bindStationCircuits(popup, site);
       return;
     }
     const d = map.getLayer('dept-fill') && map.queryRenderedFeatures(e.point, { layers: ['dept-fill'] })[0];
@@ -262,7 +310,7 @@ const initMap = (style: StyleSpecification | null) => {
 const buildChips = () => {
   const box = $('chips');
   Object.keys(groups).filter(k => labels[k]).forEach(k => {
-    const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = labels[k]; b.setAttribute('aria-pressed', String(on[k]));
+    const b = document.createElement('button'); b.id = `chip-${k}`; b.className = 'chip'; b.type = 'button'; b.textContent = labels[k]; b.setAttribute('aria-pressed', String(on[k]));
     b.onclick = () => {
       on[k] = b.getAttribute('aria-pressed') !== 'true';
       b.setAttribute('aria-pressed', String(on[k]));
@@ -301,21 +349,14 @@ const buildLegend = () => {
   source.options[2].disabled = !data.lineas_upme.features.length && !data.subestaciones_upme.features.length;
   source.onchange = () => {
     mapPopup?.remove();
-    networkMode = source.value as NetworkMode;
-    for (const id of ['lineas', 'subestaciones']) {
-      map?.getSource<maplibregl.GeoJSONSource>(id)?.setData(network[id][networkMode] as any);
-    }
-    updateFootprintVisibility();
+    setNetworkMode(source.value as NetworkMode);
   };
 };
 
 // ---------- Tarjetas nacionales ----------
 type S = { ts: string; value: number }[];
-const precioDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
-const precioDate = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium' });
-const precioDateTime = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
 const meta = { v: null as any };
-const foot = (name: 'xm' | 'ideam' | 'xm_intercambios' | 'xm_mix', label: string, upd?: string) => {
+const foot = (name: 'xm' | 'ideam' | 'xm_intercambios', label: string, upd?: string) => {
   const m = meta.v?.sources?.[name]; const bad = m && m.status !== 'ok';
   const old = upd && Date.now() - +new Date(upd) > 6 * 3600e3;
   return `<div class="src">Fuente: ${label}${upd ? ' · actualizado ' + hhmm(upd) : ''}</div>` + (bad ? `<div class="warn" role="alert">Sin datos nuevos de ${label}${m.last_ok ? ' desde ' + hhmm(m.last_ok) : ''}</div>` : old ? `<div class="warn" role="alert">Datos con más de 6 horas de antigüedad</div>` : '');
@@ -326,13 +367,7 @@ const spark = (v: number[], label: string) => {
   const pts = v.map((y, i) => `${(i / (v.length - 1) * 200).toFixed(1)},${(54 - (y - mn) / r * 48).toFixed(1)}`).join(' ');
   return `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="${label}"><polygon points="0,60 ${pts} 200,60" fill="#2457d6" opacity=".1"/><polyline points="${pts}" fill="none" stroke="#2457d6" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
 };
-const bars = (v: number[], label: string) => {
-  if (!v.length) return '';
-  const mx = Math.max(...v, 1), w = 200 / v.length;
-  return `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="${label}">${v.map((y, i) => `<rect x="${(i * w + .6).toFixed(1)}" y="${(58 - y / mx * 56).toFixed(1)}" width="${(w - 1.2).toFixed(1)}" height="${(y / mx * 56).toFixed(1)}" rx="1" fill="${i === v.length - 1 ? '#f5a300' : '#9db4ee'}"/>`).join('')}</svg>`;
-};
 const card = (id: string, h: string, body: string) => `<section class="dc" id="${id}"><h2>${h}</h2>${body}</section>`;
-const MIX_C: Record<string, string> = { ...TECH, 'Térmica líquidos': '#c9503a', 'Biomasa y otras': TECH['Biomasa'], 'Térmica': TECH['Térmica gas'], 'Otras': TECH['Biomasa'] };
 const riesgoCard = (r: any) => {
   if (!r || !['bajo', 'medio', 'alto'].includes(r.nivel)) return '';
   const C: Record<string, string> = { bajo: '#0a7a45', medio: '#b86e00', alto: '#b42318' }, BG: Record<string, string> = { bajo: '#e3f5ec', medio: '#fff1d6', alto: '#fde4e1' };
@@ -340,40 +375,10 @@ const riesgoCard = (r: any) => {
   const err = r.status === 'error' ? '<div class="warn" role="alert">Sin datos nuevos de XM; se muestra el último cálculo.</div>' : '';
   return card('riesgo', 'Riesgo de racionamiento', `<span class="rnivel" style="background:${BG[r.nivel]};color:${C[r.nivel]}">${r.nivel.toUpperCase()}</span>${rows}${err}<div class="src">Indicador propio con datos de XM · <a href="./como-funciona.html#riesgo">cómo se calcula</a></div>`);
 };
-const mixCard = (g: any) => {
-  const t: any[] = g?.por_tecnologia;
-  if (!Array.isArray(t) || !t.length) return card('mix', 'Generación real por tecnología', '<div class="src">Sin datos disponibles de XM.</div>');
-  const fecha = g.fecha_operacion ? ' · ' + new Date(g.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
-  const bar = `<div class="mixbar" role="img" aria-label="Participación por tecnología">${t.map(x => `<i style="width:${x.pct}%;background:${MIX_C[x.tecnologia] || '#8a5fb5'}" title="${esc(x.tecnologia)} ${fmt(x.pct, 1)} %"></i>`).join('')}</div>`;
-  const leg = `<div class="mixlg">${t.map(x => `<span><i style="background:${MIX_C[x.tecnologia] || '#8a5fb5'}"></i>${esc(x.tecnologia)} <b>${fmt(x.pct, 1)} %</b> · ${fmt(x.mwh / 1000, 2)} GWh</span>`).join('')}</div>`;
-  let area = '';
-  const hz: any[] = g.horario;
-  if (Array.isArray(hz) && hz.length > 1) {
-    const ks = ['Hidráulica', 'Térmica', 'Solar', 'Eólica', 'Otras'], mx = Math.max(...hz.map(o => ks.reduce((a, k) => a + (o[k] || 0), 0)), 1), n = hz.length;
-    const cum = hz.map(() => 0); let paths = '';
-    ks.forEach(k => {
-      const top = hz.map((o, i) => (cum[i] += o[k] || 0)), bot = top.map((y, i) => y - (hz[i][k] || 0)), X = (i: number) => (i / (n - 1) * 200).toFixed(1), Y = (v: number) => (58 - v / mx * 54).toFixed(1);
-      paths += `<polygon points="${top.map((y, i) => `${X(i)},${Y(y)}`).join(' ')} ${bot.map((y, i) => `${X(n - 1 - i)},${Y(bot[n - 1 - i])}`).join(' ')}" fill="${MIX_C[k]}" opacity=".85"/>`;
-    });
-    area = `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="Perfil horario de generación por tecnología">${paths}</svg><div class="ax"><span>00:00</span><span>12:00</span><span>23:00</span></div>`;
-  }
-  return card('mix', `Generación real por tecnología${fecha}`, `<div class="big">${fmt(g.total_mwh / 1000, 1)} <small>GWh en el día</small></div>${bar}${leg}${area}${foot('xm_mix', 'XM', g.updated_at)}`);
-};
 const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
-  let h = riesgoCard(rie) + mixCard(mix) + ixCard();
+  let h = riesgoCard(rie) + '<section id="precio" class="dc hourly-history"></section>' + ixCard();
   if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
   else h += card('demanda', 'Demanda de energía', '<div class="src">Sin datos disponibles.</div>');
-  if (pre?.series?.length) {
-    const s: S = pre.series;
-    const l = s[s.length - 1];
-    const last = new Date(l.ts);
-    const checked = new Date(pre.updated_at);
-    const clock = (ts: string) => new Date(ts).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' });
-    const historical = precioDay.format(last) !== precioDay.format(Date.now());
-    const freshness = historical ? '<div class="warn" role="status">Último día con datos en ColRed. Corresponde a una fecha anterior.</div>' : '';
-    const downloaded = Number.isFinite(+checked) ? ` · descargado el ${precioDateTime.format(checked)} (Colombia)` : '';
-    h += card('precio', `Precio de bolsa por hora · ${precioDate.format(last)}`, `<div class="big">${fmt(l.value, 1)} <small>${esc(pre.unit)}</small></div>${bars(s.map(x => x.value), 'Precio de bolsa por hora')}<div class="ax"><span>${clock(s[0].ts)}</span><span>${clock(l.ts)}</span></div><div class="note">Precio mayorista del último periodo mostrado.</div><div class="src">Fuente: XM${downloaded}</div>${freshness}`); flagSample(pre);
-  } else h += card('precio', 'Precio de bolsa por hora', '<div class="src">Sin datos disponibles.</div>');
   if (emb?.nacional && typeof emb.nacional.volumen_util_pct === 'number') {
     const a = emb.nacional.volumen_util_pct, b = emb.nacional.anio_anterior_pct;
     const cmp = typeof b === 'number' && isFinite(b) ? (() => { const d = a - b; return `<div class="cmp">Año anterior: ${fmt(b, 1)} % · <span class="${d >= 0 ? 'up' : 'dn'}">${d >= 0 ? '+' : '−'}${fmt(Math.abs(d), 1)} pp</span></div>`; })() : '';
@@ -381,6 +386,8 @@ const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
   } else h += card('embalses', 'Embalses · volumen útil', '<div class="src">Sin datos disponibles.</div>');
   h += '<div class="src" style="padding:6px 8px 0;border-top:1px solid var(--line)">Estimaciones propias marcadas como tales. No reemplaza avisos de XM, IDEAM ni de tu empresa de energía.</div>';
   $('cards').innerHTML = h;
+  flagSample(pre); flagSample(mix);
+  mountHistory($('precio'), pre, mix);
 };
 
 // ---------- Búsqueda ----------
