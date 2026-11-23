@@ -4,11 +4,11 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { operadoresDe, ZNI, MANUAL } from './operadores';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { completeStationNames } from './nombres-subestaciones';
-import { complementaryLines, complementaryStations } from './red-unificada';
+import { circuitKey, complementaryLines, complementaryStations, gapLengthKm } from './red-unificada';
 
 maplibregl.setWorkerUrl(workerUrl);
 
-type Fc = { type: 'FeatureCollection'; features: any[]; sample?: boolean; properties?: { generated_at?: string } };
+type Fc = { type: 'FeatureCollection'; features: any[]; sample?: boolean; properties?: { generated_at?: string; coverage?: string } };
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const jget = async (u: string) => { const r = await fetch(u); if (!r.ok) throw new Error(u); return r.json(); };
 const tryGet = (u: string) => jget(u).catch(() => null);
@@ -37,32 +37,61 @@ const fetchStyle = async (): Promise<StyleSpecification | null> => {
 let sample = false;
 const flagSample = (d: any) => { if (d && (d.sample || d.properties?.sample)) sample = true; };
 const empty: Fc = { type: 'FeatureCollection', features: [] };
+const collection = (features: any[]): Fc => ({ type: 'FeatureCollection', features });
 const data: Record<string, Fc> = {};
 type NetworkMode = 'unificada' | 'osm' | 'upme';
 let networkMode: NetworkMode = 'unificada';
 const network: Record<string, Record<NetworkMode, Fc>> = {};
+let pendingGaps = empty;
+let gapsOn = false;
+let selectedCircuit = '';
+let mapPopup: maplibregl.Popup | undefined;
 const load = async () => {
-  const names = ['lineas', 'lineas_upme', 'subestaciones', 'subestaciones_upme', 'centrales', 'municipios_centroides', 'departamentos'];
+  const names = ['lineas', 'lineas_upme', 'subestaciones', 'subestaciones_upme', 'predios_subestaciones', 'centrales', 'municipios_centroides', 'departamentos'];
   const res = await Promise.all(names.map(n => tryGet(`data/${n}.geojson`)));
   names.forEach((n, i) => { data[n] = res[i] || empty; flagSample(res[i]); });
   const osmStations = completeStationNames(data.subestaciones.features, data.subestaciones_upme.features, data.lineas_upme.features);
-  const fc = (features: any[]): Fc => ({ type: 'FeatureCollection', features });
-  const officialLines = data.lineas_upme.features, officialStations = data.subestaciones_upme.features;
+  const withCircuit = (f: any, i: number, source: string) => ({
+    ...f, properties: { ...f.properties, circuito_mapa: circuitKey(f, `${source}-${i}`) },
+  });
+  const officialLines = data.lineas_upme.features.map((f, i) => withCircuit(f, i, 'upme'));
+  const officialStations = data.subestaciones_upme.features;
+  const complementary = complementaryLines(data.lineas.features, officialLines);
+  const osmLines = data.lineas.features.filter(f => !f.properties.inferido);
+  const unresolved = complementary.filter(f => f.properties.inferido);
+  pendingGaps = collection(unresolved.map(f => ({ ...f, properties: { ...f.properties, distancia_km: gapLengthKm(f) } })));
   network.lineas = {
-    osm: data.lineas, upme: data.lineas_upme,
-    unificada: fc([...complementaryLines(data.lineas.features, officialLines), ...officialLines]),
+    osm: collection(osmLines.map((f, i) => withCircuit(f, i, 'osm'))),
+    upme: collection(officialLines),
+    unificada: collection([...complementary.filter(f => !f.properties.inferido).map((f, i) => withCircuit(f, i, 'osm')), ...officialLines]),
   };
   network.subestaciones = {
-    osm: fc(osmStations), upme: data.subestaciones_upme,
-    unificada: fc([...complementaryStations(osmStations, officialStations), ...officialStations]),
+    osm: collection(osmStations), upme: data.subestaciones_upme,
+    unificada: collection([...complementaryStations(osmStations, officialStations), ...officialStations]),
   };
 };
 
 const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<string, number>)[n] || 0;
-const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-inferidas', 'lineas-flujo'], subestaciones: ['subestaciones'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
+const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-seleccion', 'lineas-flujo'], subestaciones: ['subestaciones', 'predios-relleno', 'predios-borde'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
 const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM', intercambios: 'Intercambios' };
 const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true, intercambios: true };
 let calidadData: any = null; let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
+const gapVisibility = () => gapsOn && on.lineas && networkMode !== 'upme' ? 'visible' : 'none';
+const footprintVisibility = () => on.subestaciones && networkMode !== 'upme' ? 'visible' : 'none';
+const selectCircuit = (key = '') => {
+  selectedCircuit = key;
+  if (map?.getLayer('lineas-seleccion')) map.setFilter('lineas-seleccion', ['==', ['get', 'circuito_mapa'], key]);
+};
+const updateGapVisibility = () => {
+  if (map?.getLayer('lineas-inferidas')) map.setLayoutProperty('lineas-inferidas', 'visibility', gapVisibility());
+  const control = $<HTMLInputElement>('gap-t');
+  if (control) control.disabled = !on.lineas || networkMode === 'upme';
+};
+const updateFootprintVisibility = () => {
+  for (const layer of ['predios-relleno', 'predios-borde']) {
+    if (map?.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', footprintVisibility());
+  }
+};
 
 const alertFc = (): Fc => {
   const byId = new Map<string, any>();
@@ -77,7 +106,9 @@ const addDataLayers = () => {
   const hasGlyphs = !!map.getStyle()?.glyphs;
   src('departamentos', data.departamentos as any, { promoteId: 'cod_dpto' });
   src('lineas', network.lineas[networkMode], { attribution: 'UPME' });
+  src('huecos-pendientes', pendingGaps);
   src('subestaciones', network.subestaciones[networkMode], { attribution: 'UPME' });
+  src('predios-subestaciones', data.predios_subestaciones);
   src('centrales', data.centrales as any); src('alertas', alertFc() as any);
   const fb = isFallback;
   lay({ id: 'dept-fill', type: 'fill', source: 'departamentos', paint: { 'fill-color': fb ? '#f7f5ef' : '#2457d6', 'fill-opacity': fb ? 1 : ['case', ['boolean', ['feature-state', 'hover'], false], .1, .035] } });
@@ -86,11 +117,14 @@ const addDataLayers = () => {
   const kv: any = ['to-number', ['get', 'tension_kv'], 0];
   const w = (a: number, b: number, c: number) => ['interpolate', ['linear'], ['zoom'], 4, ['case', ['>=', kv, 500], a, ['>=', kv, 220], b, c], 9, ['case', ['>=', kv, 500], a * 2.4, ['>=', kv, 220], b * 2.4, c * 2.4]] as any;
   const vis = (k: string) => ({ visibility: on[k] ? 'visible' : 'none' } as any);
+  lay({ id: 'predios-relleno', type: 'fill', source: 'predios-subestaciones', minzoom: 10, layout: { visibility: footprintVisibility() }, paint: { 'fill-color': UPME_COLOR, 'fill-opacity': .18 } });
+  lay({ id: 'predios-borde', type: 'line', source: 'predios-subestaciones', minzoom: 10, layout: { visibility: footprintVisibility() }, paint: { 'line-color': UPME_COLOR, 'line-width': 1.5, 'line-opacity': .8 } });
   lay({ id: 'lineas-glow', type: 'line', source: 'lineas', filter: ['all', ['>=', kv, 500], ['!=', ['get', 'inferido'], true]], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#c0152f', 'line-opacity': .22, 'line-blur': 3, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 7, 9, 16] } });
   lay({ id: 'lineas-casing', type: 'line', source: 'lineas', filter: ['!=', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#fff', 'line-opacity': .85, 'line-width': w(3.6, 2.8, 2.2) } });
   const lc: any = ['case', ['>=', kv, 500], LINE_C[0][1], ['>=', kv, 220], LINE_C[1][1], ['>=', kv, 110], LINE_C[2][1], LINE_C[3][1]];
   lay({ id: 'lineas', type: 'line', source: 'lineas', filter: ['!=', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': lc, 'line-width': w(2, 1.4, 1) } });
-  lay({ id: 'lineas-inferidas', type: 'line', source: 'lineas', filter: ['==', ['get', 'inferido'], true], layout: { ...vis('lineas'), 'line-cap': 'butt' }, paint: { 'line-color': lc, 'line-opacity': .8, 'line-width': w(1.6, 1.2, 0.9), 'line-dasharray': [2, 2] } });
+  lay({ id: 'lineas-inferidas', type: 'line', source: 'huecos-pendientes', layout: { visibility: gapVisibility(), 'line-cap': 'butt' }, paint: { 'line-color': '#7b526b', 'line-opacity': .85, 'line-width': w(2, 1.8, 1.4), 'line-dasharray': [2, 2] } });
+  lay({ id: 'lineas-seleccion', type: 'line', source: 'lineas', filter: ['==', ['get', 'circuito_mapa'], selectedCircuit], layout: { ...vis('lineas'), 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#154b49', 'line-width': w(4, 3.5, 3) } });
   lay({ id: 'lineas-flujo', type: 'line', source: 'lineas', minzoom: 5, filter: ['all', ['>=', kv, 110], ['!=', ['get', 'inferido'], true]], layout: { visibility: on.lineas && flowOn ? 'visible' : 'none', 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': '#fff', 'line-opacity': .6, 'line-width': w(1.2, 0.9, 0.7), 'line-dasharray': DASH[0] } });
   lay({ id: 'subestaciones', type: 'circle', source: 'subestaciones', minzoom: 5, layout: vis('subestaciones'), paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 6], 'circle-color': ['case', ['==', ['get', 'fuente'], 'UPME'], UPME_COLOR, '#fff'], 'circle-stroke-color': '#14202e', 'circle-stroke-width': 1.6 } });
   const tc: any[] = ['match', ['get', 'tecnologia']]; Object.entries(TECH).forEach(([k, v]) => tc.push(k, v)); tc.push('#8a5fb5');
@@ -152,7 +186,8 @@ const ixCard = () => {
 
 const popupHtml: Record<string, (p: any) => string> = {
   lineas: p => p.fuente === 'UPME' ? popupHtml.lineas_upme(p) : `<div class="pp"><b>${esc(p.name || 'Línea de transmisión')}</b><div class="m">${p.tension_kv && p.tension_kv !== 'null' ? esc(p.tension_kv) + ' kV' : 'Tensión desconocida'}</div><div class="m">Fuente: OpenStreetMap</div>${errLink(p.name || 'Línea de transmisión')}</div>`,
-  'lineas-inferidas': p => `<div class="pp"><b>Tramo inferido</b><div class="m">${esc(p.tension_kv)} kV</div><div class="m">Unión estimada entre extremos de líneas de OpenStreetMap.</div>${errLink('Tramo inferido')}</div>`,
+  'lineas-inferidas': p => `<div class="pp"><b>Hueco pendiente de verificar</b><div class="m">${esc(p.tension_kv)} kV · ${fmt(Number(p.distancia_km), 2)} km entre extremos</div><div class="m">Guía entre extremos de OpenStreetMap. Conexión sin verificar.</div>${errLink('Hueco de línea ' + p.tension_kv + ' kV')}</div>`,
+  'predios-relleno': p => `<div class="pp"><b>${esc(p.nombre || 'Predio de subestación')}</b><div class="m">Límite cartográfico · OpenStreetMap</div>${errLink(p.nombre || 'Predio de subestación')}</div>`,
   lineas_upme: p => {
     const name = p.nombre || p.name || 'Línea de transmisión';
     const details = [
@@ -175,7 +210,7 @@ const popupHtml: Record<string, (p: any) => string> = {
   alertas: p => `<div class="pp"><b>${esc(p.municipio)}</b><div class="m">${esc(p.departamento)}</div><div class="m">Alerta ${esc(p.nivel)} · ${esc(p.tipo)}</div><div class="m">${esc(p.texto)}</div></div>`,
 };
 const LINE_HIT = ['lineas', 'lineas-inferidas'];
-const HIT = ['alertas', 'centrales', 'subestaciones', ...LINE_HIT];
+const HIT = ['alertas', 'centrales', 'subestaciones', ...LINE_HIT, 'predios-relleno'];
 
 // ---------- Ficha de departamento ----------
 const inRing = (pt: number[], r: number[][]) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
@@ -221,8 +256,19 @@ const initMap = (style: StyleSpecification | null) => {
   map.on('click', e => {
     const pad = 5, feats = map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: HIT.filter(l => map.getLayer(l)) });
     const f = feats[0];
-    if (f) { const lid = f.layer.id; new maplibregl.Popup({ maxWidth: '260px' }).setLngLat(LINE_HIT.includes(lid) ? e.lngLat : (f.geometry as any).coordinates).setHTML(popupHtml[lid](f.properties)).addTo(map); return; }
-    const d = map.queryRenderedFeatures(e.point, { layers: ['dept-fill'] })[0];
+    mapPopup?.remove();
+    if (f) {
+      const lid = f.layer.id;
+      selectCircuit(lid === 'lineas' ? f.properties.circuito_mapa : '');
+      const popup = new maplibregl.Popup({ maxWidth: '260px', closeOnClick: false })
+        .setLngLat(f.geometry.type === 'Point' ? f.geometry.coordinates as [number, number] : e.lngLat)
+        .setHTML(popupHtml[lid](f.properties))
+        .addTo(map);
+      mapPopup = popup;
+      popup.on('close', () => { mapPopup = undefined; selectCircuit(); });
+      return;
+    }
+    const d = map.getLayer('dept-fill') && map.queryRenderedFeatures(e.point, { layers: ['dept-fill'] })[0];
     if (d) { const full = data.departamentos.features.find(x => String(x.properties.cod_dpto) === String(d.properties.cod_dpto)); if (full) openFicha(full); }
   });
 };
@@ -231,7 +277,18 @@ const buildChips = () => {
   const box = $('chips');
   Object.keys(groups).filter(k => labels[k]).forEach(k => {
     const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = labels[k]; b.setAttribute('aria-pressed', String(on[k]));
-    b.onclick = () => { on[k] = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on[k])); groups[k].forEach(l => map.getLayer(l) && map.setLayoutProperty(l, 'visibility', on[k] ? 'visible' : 'none')); if (k === 'lineas') applyFlow(); if (k === 'intercambios') setIx(); };
+    b.onclick = () => {
+      on[k] = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', String(on[k]));
+      groups[k].forEach(l => map.getLayer(l) && map.setLayoutProperty(l, 'visibility', on[k] ? 'visible' : 'none'));
+      if (k === 'lineas') {
+        if (!on.lineas) mapPopup?.remove();
+        applyFlow();
+        updateGapVisibility();
+      }
+      if (k === 'subestaciones') updateFootprintVisibility();
+      if (k === 'intercambios') setIx();
+    };
     box.append(b);
   });
 };
@@ -245,22 +302,29 @@ const buildLegend = () => {
   $('legend-body').innerHTML = `<div class="lg"><label for="network-source">Fuente de la red</label>
   <select id="network-source"><option value="unificada">Vista unificada</option><option value="osm">OpenStreetMap</option><option value="upme">UPME</option></select>
   <h3>Líneas por tensión</h3>${LINE_C.map(([t, c], i) => row(c, t, false, [4, 3, 2, 2][i])).join('')}
-  <span class="src">Los trazos punteados son uniones estimadas.</span>
+  ${pendingGaps.features.length ? `<label class="sw-t"><input type="checkbox" id="gap-t"><span>Mostrar huecos pendientes (${pendingGaps.features.length})</span></label><span class="src">Los trazos punteados señalan conexiones por verificar.</span>` : ''}
+  <span class="src">Selecciona una línea para resaltar su recorrido disponible.</span>
   ${data.lineas_upme.features.length ? `<span class="src">Trazados UPME${upmeDate}</span>` : ''}
   <h3>Centrales por tecnología</h3>${Object.entries(TECH).map(([t, c]) => row(c, t, true)).join('')}<span class="src">Tamaño según potencia (MW); punto pequeño = sin dato</span>
   <h3>Subestaciones</h3><div><span class="dot" style="background:#fff;border:2px solid #14202e;box-shadow:none"></span>OpenStreetMap</div>
   ${data.subestaciones_upme.features.length ? row(UPME_COLOR, 'UPME', true) : ''}
+  ${data.predios_subestaciones.features.length ? `<span class="src">Predios de OpenStreetMap visibles al acercar el mapa${data.predios_subestaciones.properties?.coverage ? ' · ' + esc(data.predios_subestaciones.properties.coverage) : ''}.</span>` : ''}
   ${alertasData ? '<h3>Alertas IDEAM</h3>' : ''}${!alertasData ? '' : Object.entries(LVL).map(([t, c]) => row(c, t[0].toUpperCase() + t.slice(1), true)).join('')}
   <h3>Intercambios</h3><div><svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" style="margin-right:8px;flex:none"><path d="M1 6H15" stroke="#0b6e4f" stroke-width="3"/><path d="M13 1L21 6L13 11Z" fill="#0b6e4f"/></svg>Sentido del saldo publicado</div>
   <h3>Animación</h3><label class="sw-t"><input type="checkbox" id="flow-t" role="switch" ${flowOn ? 'checked' : ''}><span>Animación de corriente</span></label><span class="src">La animación es ilustrativa; no indica el sentido real del flujo.</span>
   <span class="src" style="margin-top:10px">Fuentes: XM, UPME, DANE y OpenStreetMap.</span></div>`;
   const source = $<HTMLSelectElement>('network-source');
   source.options[2].disabled = !data.lineas_upme.features.length && !data.subestaciones_upme.features.length;
+  const gap = $<HTMLInputElement>('gap-t');
+  if (gap) gap.onchange = () => { gapsOn = gap.checked; updateGapVisibility(); };
   source.onchange = () => {
+    mapPopup?.remove();
     networkMode = source.value as NetworkMode;
     for (const id of ['lineas', 'subestaciones']) {
       map?.getSource<maplibregl.GeoJSONSource>(id)?.setData(network[id][networkMode] as any);
     }
+    updateGapVisibility();
+    updateFootprintVisibility();
   };
 };
 

@@ -1,5 +1,6 @@
 // Descarga datos reales de OpenStreetMap (Overpass) para Colombia. Ejecutar en tu PC: npm run datos:osm  (Node 18+)
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { substationFootprints } from './osm-predios.mjs';
 const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 const AREA = 'area["ISO3166-1"="CO"][admin_level=2]->.co;';
 const q = body => `[out:json][timeout:300];${AREA}(${body});out geom tags;`;
@@ -47,6 +48,8 @@ out('lineas', fc(lines.filter(e => e.geometry?.length > 1).map(e => ({ type: 'Fe
 
 const subs = await overpass(q('node["power"="substation"](area.co);way["power"="substation"](area.co);relation["power"="substation"](area.co);'));
 out('subestaciones', fc(subs.map(e => { const c = center(e); return c && { type: 'Feature', properties: { nombre: e.tags?.name || null, tension_kv: kvOf(e.tags?.voltage) }, geometry: { type: 'Point', coordinates: c.map(r5) } }; }).filter(Boolean)));
+const footprints = substationFootprints(subs);
+if (footprints.length) out('predios_subestaciones', fc(footprints));
 
 const plants = await overpass(q('way["power"="plant"](area.co);relation["power"="plant"](area.co);node["power"="plant"](area.co);'));
 out('centrales', fc(plants.map(e => {

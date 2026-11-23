@@ -26,7 +26,11 @@ Ejecutar en tu PC (Node 18+): `cd web && npm run datos:oficiales` (o cada `datos
 
 La vista unificada muestra el inventario UPME y los datos complementarios de OpenStreetMap. Un trazado OSM se omite de la vista unificada si coincide a lo largo de su recorrido con un mismo trazado UPME de igual tensión. Un punto OSM se omite si hay una coincidencia cercana y sin conflicto de nombre o tensión. El selector **Fuente de la red** de la leyenda permite consultar cada inventario.
 
-La leyenda muestra la fecha de descarga de las líneas UPME. Cada ficha indica su fuente. Los trazos punteados de OpenStreetMap representan uniones estimadas entre tramos.
+La leyenda muestra la fecha de descarga de las líneas UPME. Cada ficha indica su fuente. Al seleccionar una línea UPME se resaltan sus trazados con el mismo nombre, tensión y subestaciones terminales. Para OpenStreetMap se resalta el tramo seleccionado.
+
+La vista principal dibuja los trazados de ambas fuentes. Las uniones estimadas que coinciden en todo su recorrido con un trazado UPME de igual tensión quedan representadas por el trazado oficial. **Mostrar huecos pendientes** permite consultar las demás como guías punteadas con distancia entre extremos. El conteo corresponde a las uniones estimadas del archivo de OpenStreetMap y no es un inventario completo de los cortes reales.
+
+`predios_subestaciones.geojson` muestra los contornos cerrados que OpenStreetMap etiqueta como subestaciones. La descarga inicial cubre el piloto Manizales–La Enea. `datos:osm` amplía la capa con los predios disponibles en la consulta nacional. Los predios se dibujan al acercar el mapa; las coordenadas de los trazados y de los marcadores no se modifican.
 
 Para los intercambios internacionales, ColRed consulta las métricas horarias `ImpoEner` y `ExpoEner` de XM por enlace, en kWh, y publica el total diario en MWh. El saldo corresponde a exportaciones menos importaciones de Colombia cuando hay datos de ambas direcciones.
 
