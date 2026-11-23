@@ -1,8 +1,9 @@
-// Líneas STN y subestaciones STN de UPME (ArcGIS Online, servicio "Lineamientos").
+// Líneas construidas STN/STR y subestaciones STN de UPME.
 // Uso: node scripts/fetch-upme.mjs
 import { P, writeJsonAtomic, arcgisPaged, parseKv, roundCoords, fail } from './lib.mjs';
 
 const SVC = 'https://services.arcgis.com/deQSb0Gn7gDPf3uV/ArcGIS/rest/services/Lineamientos/FeatureServer';
+const BUILT = 'https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/Sistema_transmision_lineas_construidas/FeatureServer/17';
 const clean = s => (s == null || String(s).trim() === '' || String(s).trim().toUpperCase() === 'NA') ? null : String(s).replace(/\s+/g, ' ').trim();
 
 export function mapLine(f) {
@@ -21,17 +22,40 @@ export function mapSub(f) {
   return { type: 'Feature', properties: { tension_kv: kv, nombre, propietario: clean(a.NOMBRE_PROPIETARIO), fuente: 'UPME' }, geometry: { ...f.geometry, coordinates: roundCoords(f.geometry.coordinates, 5) } };
 }
 
+export function mapBuiltLine(f) {
+  const a = f.properties || {};
+  if (!['LineString', 'MultiLineString'].includes(f.geometry?.type) || !f.geometry.coordinates?.length) return null;
+  const sistema = clean(a.sistema)?.match(/^(STN|STR)\b/)?.[1];
+  if (!sistema) return null;
+  const tension_kv = Number(a.tension) > 0 ? Number(a.tension) : parseKv(a.nombre_circuito, a.nombre_trazado);
+  const inicio = clean(a.nombre_subestacion_inicio);
+  const fin = clean(a.nombre_subestacion_fin);
+  const nombre = clean(a.nombre_circuito) || clean(a.nombre_trazado) || [inicio, fin].filter(Boolean).join(' - ') || `Línea ${sistema}`;
+  return {
+    type: 'Feature',
+    properties: { tension_kv, nombre, name: nombre, sistema, subestacion_inicio: inicio, subestacion_fin: fin, propietario: clean(a.nombre_propietario), vigencia: clean(a.vigencia), fuente: 'UPME' },
+    geometry: f.geometry,
+  };
+}
+
 async function main() {
-  const lines = (await arcgisPaged(`${SVC}/0`, { outFields: 'NOMB_CIRCUITO,NOMB_TRAZADO,NOMBRE_SUBES_INICIO,NOMBRE_SUBES_FIN,NOMBRE_PROPIETARIO,ID_TENSION', maxAllowableOffset: 0.0005, geometryPrecision: 5 }, { pageSize: 1000 }).catch(e => fail('UPME capa 0 (STN)', e)));
-  const subs = (await arcgisPaged(`${SVC}/22`, { outFields: 'NOMBRE_SUBESTACION,NOMBRE_PROPIETARIO,ID_TENSION' }, { pageSize: 1000 }).catch(e => fail('UPME capa 22 (Subestaciones STN)', e)));
-  const L = lines.map(mapLine).filter(Boolean), S = subs.map(mapSub).filter(Boolean);
-  console.log(`UPME STN líneas: ${lines.length} recibidas, ${L.length} con tensión; subestaciones: ${subs.length} recibidas, ${S.length} con tensión`);
-  if (L.length < 20) fail(`demasiadas pocas líneas (${L.length}); no se escribe nada`);
-  const prop = { source: 'UPME - ArcGIS Lineamientos (STN)', generated_at: new Date().toISOString() };
-  writeJsonAtomic(P('data', 'lineas_upme.geojson'), { type: 'FeatureCollection', properties: prop, features: L });
-  if (S.length) writeJsonAtomic(P('data', 'subestaciones_upme.geojson'), { type: 'FeatureCollection', properties: prop, features: S });
-  else console.warn('  aviso: sin subestaciones; no se escribe subestaciones_upme.geojson');
-  if (S.length < 50) console.warn('  aviso: la capa 22 parece cubrir solo parte del país (campo TERRITORIO = Sabana de Bogotá); revisar cobertura.');
-  console.log('Solo STN (>=220 kV); las líneas STR (<220 kV) no se encontraron en un servicio UPME público. Fuente: UPME');
+  const generated_at = new Date().toISOString();
+  const [lines, subs] = await Promise.allSettled([
+    arcgisPaged(BUILT, { outFields: 'sistema,tension,nombre_circuito,nombre_trazado,nombre_subestacion_inicio,nombre_subestacion_fin,nombre_propietario,vigencia', geometryPrecision: 5 }),
+    arcgisPaged(`${SVC}/22`, { outFields: 'NOMBRE_SUBESTACION,NOMBRE_PROPIETARIO,ID_TENSION' }),
+  ]);
+  const L = lines.status === 'fulfilled' ? lines.value.map(mapBuiltLine).filter(Boolean) : [];
+  if (L.length >= 20 && L.some(f => f.properties.sistema === 'STN') && L.some(f => f.properties.sistema === 'STR')) {
+    writeJsonAtomic(P('data', 'lineas_upme.geojson'), { type: 'FeatureCollection', properties: { source: 'UPME · Líneas construidas STN y STR', generated_at }, features: L });
+    console.log(`UPME: ${L.length} trazados construidos STN y STR`);
+  } else {
+    console.warn('UPME líneas: respuesta insuficiente; se conserva el archivo anterior.', lines.reason?.message || '');
+  }
+  const S = subs.status === 'fulfilled' ? subs.value.map(mapSub).filter(Boolean) : [];
+  if (S.length) {
+    writeJsonAtomic(P('data', 'subestaciones_upme.geojson'), { type: 'FeatureCollection', properties: { source: 'UPME · ArcGIS Lineamientos (STN)', generated_at }, features: S });
+  } else {
+    console.warn('UPME subestaciones: se conserva el archivo anterior.', subs.reason?.message || '');
+  }
 }
 if (process.argv[1]?.endsWith('fetch-upme.mjs')) main().catch(e => fail('fetch-upme', e));

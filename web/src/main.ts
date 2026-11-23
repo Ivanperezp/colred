@@ -60,7 +60,7 @@ const addDataLayers = () => {
   const lay = (l: any) => { if (!map.getLayer(l.id)) map.addLayer(l); };
   const hasGlyphs = !!map.getStyle()?.glyphs;
   src('departamentos', data.departamentos as any, { promoteId: 'cod_dpto' }); src('lineas', data.lineas as any); src('subestaciones', data.subestaciones as any);
-  src('lineas_upme', data.lineas_upme as any, { attribution: 'UPME · ArcGIS Lineamientos (STN)' });
+  src('lineas_upme', data.lineas_upme as any, { attribution: 'UPME' });
   src('centrales', data.centrales as any); src('alertas', alertFc() as any);
   const fb = isFallback;
   lay({ id: 'dept-fill', type: 'fill', source: 'departamentos', paint: { 'fill-color': fb ? '#f7f5ef' : '#2457d6', 'fill-opacity': fb ? 1 : ['case', ['boolean', ['feature-state', 'hover'], false], .1, .035] } });
@@ -135,7 +135,8 @@ const popupHtml: Record<string, (p: any) => string> = {
       p.subestacion_inicio && `Inicio: ${p.subestacion_inicio}`,
       p.subestacion_fin && `Fin: ${p.subestacion_fin}`,
       p.propietario && `Propietario: ${p.propietario}`,
-      'Fuente: UPME · STN',
+      p.vigencia && `Vigencia del registro: ${p.vigencia}`,
+      `Fuente: UPME · ${p.sistema || 'STN'}`,
     ];
     return `<div class="pp"><b>${esc(name)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}${errLink(name)}</div>`;
   },
@@ -215,7 +216,7 @@ const buildLegend = () => {
     : '';
   $('legend-body').innerHTML = `<div class="lg"><h3>Líneas OSM por tensión</h3>${LINE_C.map(([t, c], i) => row(c, t, false, [4, 3, 2, 2][i])).join('')}
   <span class="src">Los trazos punteados son uniones estimadas.</span>
-  ${data.lineas_upme.features.length ? row(UPME_COLOR, 'Líneas UPME · STN' + upmeDate) : ''}
+  ${data.lineas_upme.features.length ? row(UPME_COLOR, 'Líneas UPME · ' + (data.lineas_upme.features.some(f => f.properties.sistema === 'STR') ? 'STN y STR' : 'STN') + upmeDate) : ''}
   <h3>Centrales por tecnología</h3>${Object.entries(TECH).map(([t, c]) => row(c, t, true)).join('')}<span class="src">Tamaño según potencia (MW); punto pequeño = sin dato</span>
   <h3>Subestaciones</h3><div><span class="dot" style="background:#fff;border:2px solid #14202e;box-shadow:none"></span>Subestación</div>
   ${alertasData ? '<h3>Alertas IDEAM</h3>' : ''}${!alertasData ? '' : Object.entries(LVL).map(([t, c]) => row(c, t[0].toUpperCase() + t.slice(1), true)).join('')}
@@ -226,6 +227,9 @@ const buildLegend = () => {
 
 // ---------- Tarjetas nacionales ----------
 type S = { ts: string; value: number }[];
+const precioDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
+const precioDate = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium' });
+const precioDateTime = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
 const meta = { v: null as any };
 const foot = (name: 'xm' | 'ideam', label: string, upd?: string) => {
   const m = meta.v?.sources?.[name]; const bad = m && m.status !== 'ok';
@@ -275,9 +279,15 @@ const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
   if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
   else h += card('demanda', 'Demanda de energía', '<div class="src">Sin datos disponibles.</div>');
   if (pre?.series?.length) {
-    const today = new Date().toDateString(); let s: S = pre.series.filter((x: any) => new Date(x.ts).toDateString() === today); if (s.length < 2) s = pre.series.slice(-24);
+    const s: S = pre.series;
     const l = s[s.length - 1];
-    h += card('precio', `Precio de bolsa por hora${pre.fecha_operacion ? ' · ' + new Date(pre.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : ''}`, `<div class="big">${fmt(l.value, 1)} <small>${esc(pre.unit)}</small></div>${bars(s.map(x => x.value), 'Precio de bolsa por hora')}<div class="ax"><span>${hhmm(s[0].ts)}</span><span>${hhmm(l.ts)}</span></div><div class="note">Precio mayorista; no es tu tarifa.</div>${foot('xm', 'XM', pre.updated_at)}`); flagSample(pre);
+    const last = new Date(l.ts);
+    const checked = new Date(pre.updated_at);
+    const clock = (ts: string) => new Date(ts).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' });
+    const historical = precioDay.format(last) !== precioDay.format(Date.now());
+    const freshness = historical ? '<div class="warn" role="status">Último día con datos en ColRed. Corresponde a una fecha anterior.</div>' : '';
+    const downloaded = Number.isFinite(+checked) ? ` · descargado el ${precioDateTime.format(checked)} (Colombia)` : '';
+    h += card('precio', `Precio de bolsa por hora · ${precioDate.format(last)}`, `<div class="big">${fmt(l.value, 1)} <small>${esc(pre.unit)}</small></div>${bars(s.map(x => x.value), 'Precio de bolsa por hora')}<div class="ax"><span>${clock(s[0].ts)}</span><span>${clock(l.ts)}</span></div><div class="note">Precio mayorista del último periodo mostrado.</div><div class="src">Fuente: XM${downloaded}</div>${freshness}`); flagSample(pre);
   } else h += card('precio', 'Precio de bolsa por hora', '<div class="src">Sin datos disponibles.</div>');
   if (emb?.nacional && typeof emb.nacional.volumen_util_pct === 'number') {
     const a = emb.nacional.volumen_util_pct, b = emb.nacional.anio_anterior_pct;

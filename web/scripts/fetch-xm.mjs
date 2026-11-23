@@ -56,7 +56,8 @@ export function pctSeries(vol, cap) {
 }
 
 async function main() {
-  const now = new Date(), today = new Date(ymd(now) + 'T00:00:00Z');
+  const dayCo = t => ymd(new Date(+new Date(t) - 5 * 3600000));
+  const now = new Date(), today = new Date(dayCo(now) + 'T00:00:00Z');
   const stamp = now.toISOString();
   const jobs = {};
 
@@ -70,10 +71,9 @@ async function main() {
     const j = await xm('hourly', { MetricId: 'PrecBolsNaci', StartDate: ymd(addDays(today, -7)), EndDate: ymd(today), Entity: 'Sistema', Filter: [] });
     const all = parseHourly(j, 1); // ya en COP/kWh
     if (!all.length) throw new Error('PrecBolsNaci sin datos');
-    const lastDay = all[all.length - 1].ts.slice(0, 10);
-    // el último día con datos (el de "hoy" puede no estar publicado aún); día en hora Colombia
-    const dayCo = t => new Date(new Date(t).getTime() - 5 * 3600000).toISOString().slice(0, 10);
     const ld = dayCo(all[all.length - 1].ts);
+    const cached = readJson(P('api', 'v1', 'precio_bolsa.json'));
+    if (!cached?.sample && cached?.series?.at(-1)?.ts > all.at(-1).ts) throw new Error('PrecBolsNaci devolvió un periodo anterior al ya guardado');
     return { source: 'XM', updated_at: stamp, unit: 'COP/kWh', fecha_operacion: ld, series: all.filter(x => dayCo(x.ts) === ld) };
   };
   jobs.embalses = async () => {
