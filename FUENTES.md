@@ -22,4 +22,10 @@ Ejecutar en tu PC (Node 18+): `cd web && npm run datos:oficiales` (o cada `datos
 | Calidad, otros ids | `kh9a-6h5u` (variación ITAD), `gjrs-8pqf` (formato 7), `f2yr-8sxq` (Informe Anual Operadores de Red: SAIDI/SAIFI, sin columnas legibles ni acceso JSON probado) | - | - | - | sí existen; f2yr-8sxq no consultable |
 | IDEAM alertas | datos.gov.co: Alertas Hidrológicas `h4gs-wsmg`, Deslizamientos `m3en-ptx7` (municipal), Incendios `vnzc-4d6e`, Meteomarinas `3e2y-7ych`; resource JSON no accesible en la prueba | columnas no confirmadas | datos abiertos IDEAM | diaria | ids sí (catálogo Socrata); datos no. Sin script (no hay estructura confirmada); no hay servicio ArcGIS de alertas confirmado |
 
+## Cobertura en el mapa
+
+El mapa ofrece una capa opcional de líneas STN de UPME a partir de `web/public/data/lineas_upme.geojson`. La leyenda muestra la fecha de descarga cuando está disponible. La ficha muestra el nombre, la tensión y, si la fuente los trae, las subestaciones de inicio y fin y el propietario. Los trazos punteados de la capa OpenStreetMap son uniones estimadas entre tramos.
+
+El geoportal de la UPME también documenta una [capa de líneas construidas STN y STR](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/Sistema_transmision_lineas_construidas/FeatureServer/layers) y una [capa de líneas de convocatorias](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/convocatorias_lineas_transmision/MapServer/1). Quedan por verificar la descarga, la cobertura y la vigencia de sus registros antes de incorporarlas.
+
 Notas: Superservicios también publica `Mapa_Interrupciones` (requiere token) y la carpeta `IDEAM` (solo anomalías climáticas mensuales).

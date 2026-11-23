@@ -9,8 +9,9 @@ export function mapLine(f) {
   const a = f.properties || {};
   const kv = parseKv(a.NOMB_CIRCUITO, a.NOMB_TRAZADO);
   if (!kv || !f.geometry) return null;
-  const nombre = clean(a.NOMB_CIRCUITO) || [clean(a.NOMBRE_SUBES_INICIO), clean(a.NOMBRE_SUBES_FIN)].filter(Boolean).join(' - ') || 'Línea STN';
-  return { type: 'Feature', properties: { tension_kv: kv, nombre, name: nombre, propietario: clean(a.NOMBRE_PROPIETARIO), fuente: 'UPME' }, geometry: { ...f.geometry, coordinates: roundCoords(f.geometry.coordinates, 4) } };
+  const inicio = clean(a.NOMBRE_SUBES_INICIO), fin = clean(a.NOMBRE_SUBES_FIN);
+  const nombre = clean(a.NOMB_CIRCUITO) || [inicio, fin].filter(Boolean).join(' - ') || 'Línea STN';
+  return { type: 'Feature', properties: { tension_kv: kv, nombre, name: nombre, subestacion_inicio: inicio, subestacion_fin: fin, propietario: clean(a.NOMBRE_PROPIETARIO), fuente: 'UPME' }, geometry: { ...f.geometry, coordinates: roundCoords(f.geometry.coordinates, 4) } };
 }
 export function mapSub(f) {
   const a = f.properties || {};
