@@ -52,6 +52,10 @@ assert.equal(pickMetric(cat, { idRe: /^PrecEsca/, entity: 'Sistema' }).id, 'Prec
 assert.equal(pickMetric(cat, { nameRe: /^nada/, entity: 'Sistema' }), null);
 const rec = parseRecursos({ Items: [{ ListEntities: [{ Values: { Code: 'GVIO', Type: 'HIDRAULICA', EnerSource: 'AGUA' } }, { Values: { Code: 'TF1', Type: 'TERMICA', EnerSource: 'GAS' } }, { Values: { Code: 'S1', Type: 'SOLAR', EnerSource: 'RAD_SOLAR' } }] }] });
 assert.equal(clasificar(rec.get('TF1')).fine, 'Térmica gas'); assert.equal(clasificar({ type: 'TERMICA', source: 'CARBÓN' }).fine, 'Térmica carbón');
+assert.equal(clasificar({ type: 'COGENERADOR', source: 'BAGAZO' }).fine, 'Biomasa');
+assert.equal(clasificar({ type: 'COGENERADOR', source: 'GAS' }).fine, 'Térmica gas');
+assert.equal(clasificar({ type: 'TERMICA', source: 'GLP' }).fine, 'Térmica líquidos');
+assert.equal(clasificar(undefined).fine, 'Sin clasificar');
 const gj = { Items: [{ Date: '2026-11-19', HourlyEntities: [{ Id: 'GVIO', Values: { code: 'GVIO', Hour01: '3000000', Hour02: '1000000' } }, { Id: 'TF1', Values: { code: 'TF1', Hour01: '1000000' } }] }] };
 const ag = agregarGeneracion(gj, rec)['2026-11-19']; const mx = construirMix(ag, '2026-11-19', 'x');
 assert.equal(mx.total_mwh, 5000); assert.equal(mx.por_tecnologia[0].pct, 80); assert.equal(mx.horario[0].Térmica, 1000); assert.equal(mx.horario.length, 24);

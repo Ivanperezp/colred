@@ -9,14 +9,14 @@ const nrm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUppe
 export function clasificar(rec) {
   const t = nrm(rec?.type), s = nrm(rec?.source);
   if (/HIDR/.test(t) || /AGUA/.test(s)) return { fine: 'Hidráulica', coarse: 'Hidráulica' };
-  if (/SOLAR|RAD/.test(t + ' ' + s)) return { fine: 'Solar', coarse: 'Solar' };
+  if (/SOLAR/.test(t + ' ' + s)) return { fine: 'Solar', coarse: 'Solar' };
   if (/EOLIC|VIENTO/.test(t + ' ' + s)) return { fine: 'Eólica', coarse: 'Eólica' };
-  if (/BIOMASA|BAGAZO|BIOGAS|RESIDUO/.test(s)) return { fine: 'Biomasa y otras', coarse: 'Otras' };
+  if (/BIOMASA|BAGAZO|BIOGAS|RESIDUO/.test(s)) return { fine: 'Biomasa', coarse: 'Otras' };
   if (/GAS/.test(s)) return { fine: 'Térmica gas', coarse: 'Térmica' };
   if (/CARBON/.test(s)) return { fine: 'Térmica carbón', coarse: 'Térmica' };
-  if (/ACPM|COMBUSTOLEO|FUEL|DIESEL|JET|QUEROSENO|LIQUID|GASOLINA/.test(s)) return { fine: 'Térmica líquidos', coarse: 'Térmica' };
-  if (/TERM/.test(t)) return { fine: 'Térmica gas', coarse: 'Térmica' };
-  return { fine: 'Biomasa y otras', coarse: 'Otras' };
+  if (/ACPM|COMBUSTOLEO|FUEL|DIESEL|JET|QUEROSENO|LIQUID|GASOLINA|\bGLP\b/.test(s)) return { fine: 'Térmica líquidos', coarse: 'Térmica' };
+  if (/TERM/.test(t)) return { fine: 'Térmica sin combustible identificado', coarse: 'Térmica' };
+  return { fine: 'Sin clasificar', coarse: 'Otras' };
 }
 // json de Gene/Recurso (horario) + mapa de recursos -> agregados en MWh por día. Devuelve {fecha: {fine:{}, hora:[{coarse:{}}...]}}
 export function agregarGeneracion(json, recursos) {
@@ -39,7 +39,7 @@ export function agregarGeneracion(json, recursos) {
 }
 export function construirMix(day, fecha, stamp) {
   const total = Object.values(day.fine).reduce((a, b) => a + b, 0);
-  const orden = ['Hidráulica', 'Térmica gas', 'Térmica carbón', 'Térmica líquidos', 'Solar', 'Eólica', 'Biomasa y otras'];
+  const orden = ['Hidráulica', 'Térmica gas', 'Térmica carbón', 'Térmica líquidos', 'Térmica sin combustible identificado', 'Solar', 'Eólica', 'Biomasa', 'Sin clasificar'];
   const r1 = x => +x.toFixed(1);
   return {
     source: 'XM', updated_at: stamp, fecha_operacion: fecha, unit: 'MWh', total_mwh: r1(total),
@@ -49,7 +49,8 @@ export function construirMix(day, fecha, stamp) {
 }
 
 async function main() {
-  const stamp = new Date().toISOString(), today = new Date(ymd(new Date()) + 'T00:00:00Z');
+  const now = new Date(), stamp = now.toISOString();
+  const today = new Date(ymd(new Date(+now - 5 * 3600000)) + 'T00:00:00Z');
   const file = P('api', 'v1', 'generacion.json');
   try {
     let id = 'Gene';

@@ -7,6 +7,7 @@ Ejecutar en tu PC (Node 18+): `cd web && npm run datos:oficiales` (o cada `datos
 |---|---|---|---|---|---|
 | XM API (formato de petición) | POST `https://servapibi.xm.com.co/{hourly,daily,monthly,lists}` body `{MetricId,StartDate,EndDate,Entity,Filter}`; catálogo: `MetricId:"ListadoMetricas"` en `/lists` | respuesta `Items[].Date` + `HourlyEntities`/`DailyEntities`/`ListEntities` | API pública de XM; citar XM como fuente | horaria/diaria | sí (formato, README oficial y pydataxm) |
 | Demanda real SIN | `/hourly` `MetricId:"DemaReal"` `Entity:"Sistema"` | `Values.Hour01..Hour24` (kWh, se divide por 1000 a MWh) | idem | hora | no (nombres de métrica no confirmados por consulta) |
+| Generación real por tecnología | `/hourly` `MetricId:"Gene"` `Entity:"Recurso"`, cruzada con `ListadoRecursos` | generación horaria por recurso en kWh, tipo de recurso y fuente primaria | idem | hora; ColRed muestra el último día disponible | sí, consulta y agregación del 19 de noviembre de 2026 |
 | Precio de bolsa nacional | `/hourly` `PrecBolsNaci` `Sistema` | `Hour01..Hour24` (COP/kWh) | idem | hora | no |
 | Embalses (% útil nacional) | `/daily` `VoluUtilDiarEner` y `CapaUtilDiarEner`, `Sistema`; % = volumen/capacidad | `Values.Value` (kWh) | idem | diaria | no |
 | Listado de recursos | `/lists` `ListadoRecursos` (Entity `Sistema`, reintenta `Recurso`) | `Values.Code/Name/Type` (insensible a mayúsculas) | idem | variable | no |

@@ -270,7 +270,7 @@ const precioDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota',
 const precioDate = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium' });
 const precioDateTime = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
 const meta = { v: null as any };
-const foot = (name: 'xm' | 'ideam' | 'xm_intercambios', label: string, upd?: string) => {
+const foot = (name: 'xm' | 'ideam' | 'xm_intercambios' | 'xm_mix', label: string, upd?: string) => {
   const m = meta.v?.sources?.[name]; const bad = m && m.status !== 'ok';
   const old = upd && Date.now() - +new Date(upd) > 6 * 3600e3;
   return `<div class="src">Fuente: ${label}${upd ? ' · actualizado ' + hhmm(upd) : ''}</div>` + (bad ? `<div class="warn" role="alert">Sin datos nuevos de ${label}${m.last_ok ? ' desde ' + hhmm(m.last_ok) : ''}</div>` : old ? `<div class="warn" role="alert">Datos con más de 6 horas de antigüedad</div>` : '');
@@ -296,10 +296,11 @@ const riesgoCard = (r: any) => {
   return card('riesgo', 'Riesgo de racionamiento', `<span class="rnivel" style="background:${BG[r.nivel]};color:${C[r.nivel]}">${r.nivel.toUpperCase()}</span>${rows}${err}<div class="src">Indicador propio con datos de XM · <a href="./como-funciona.html#riesgo">cómo se calcula</a></div>`);
 };
 const mixCard = (g: any) => {
-  const t: any[] = g?.por_tecnologia; if (!Array.isArray(t) || !t.length) return '';
+  const t: any[] = g?.por_tecnologia;
+  if (!Array.isArray(t) || !t.length) return card('mix', 'Generación real por tecnología', '<div class="src">Sin datos disponibles de XM.</div>');
   const fecha = g.fecha_operacion ? ' · ' + new Date(g.fecha_operacion + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) : '';
   const bar = `<div class="mixbar" role="img" aria-label="Participación por tecnología">${t.map(x => `<i style="width:${x.pct}%;background:${MIX_C[x.tecnologia] || '#8a5fb5'}" title="${esc(x.tecnologia)} ${fmt(x.pct, 1)} %"></i>`).join('')}</div>`;
-  const leg = `<div class="mixlg">${t.map(x => `<span><i style="background:${MIX_C[x.tecnologia] || '#8a5fb5'}"></i>${esc(x.tecnologia)} <b>${fmt(x.pct, 1)} %</b></span>`).join('')}</div>`;
+  const leg = `<div class="mixlg">${t.map(x => `<span><i style="background:${MIX_C[x.tecnologia] || '#8a5fb5'}"></i>${esc(x.tecnologia)} <b>${fmt(x.pct, 1)} %</b> · ${fmt(x.mwh / 1000, 2)} GWh</span>`).join('')}</div>`;
   let area = '';
   const hz: any[] = g.horario;
   if (Array.isArray(hz) && hz.length > 1) {
@@ -311,7 +312,7 @@ const mixCard = (g: any) => {
     });
     area = `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="Perfil horario de generación por tecnología">${paths}</svg><div class="ax"><span>00:00</span><span>12:00</span><span>23:00</span></div>`;
   }
-  return card('mix', `Generación por tecnología${fecha}`, `<div class="big">${fmt(g.total_mwh / 1000, 1)} <small>GWh en el día</small></div>${bar}${leg}${area}${foot('xm', 'XM', g.updated_at)}`);
+  return card('mix', `Generación real por tecnología${fecha}`, `<div class="big">${fmt(g.total_mwh / 1000, 1)} <small>GWh en el día</small></div>${bar}${leg}${area}${foot('xm_mix', 'XM', g.updated_at)}`);
 };
 const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
   let h = riesgoCard(rie) + mixCard(mix) + ixCard();
