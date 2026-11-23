@@ -84,6 +84,25 @@ async function main() {
     const historico = combinarHistorial(cached, days, since, day => day.series?.length || 0);
     return { ...historico.at(-1), historico };
   };
+  // Precio previsto de hoy: costo marginal del despacho programado (XM lo publica para el día en curso)
+  jobs.precio_hoy = async () => {
+    const j = await xm('hourly', { MetricId: 'CostMargDesp', StartDate: ymd(addDays(today, -1)), EndDate: ymd(addDays(today, 1)), Entity: 'Sistema', Filter: [] });
+    const all = parseHourly(j, 1);
+    const hoy = fechaColombia(now);
+    const delDia = d => all.filter(p => fechaColombia(p.ts) === d);
+    let fecha = hoy, series = delDia(hoy);
+    if (!series.length) { fecha = fechaColombia(addDays(today, -1)); series = delDia(fecha); }
+    if (!series.length) throw new Error('CostMargDesp sin datos');
+    const manana = delDia(fechaColombia(addDays(today, 1)));
+    return { source: 'XM', metrica: 'CostMargDesp', updated_at: stamp, unit: 'COP/kWh', fecha_operacion: fecha, series, ...(manana.length ? { manana } : {}) };
+  };
+  // Demanda total diaria del SIN (sale con un día de retraso, antes que la horaria)
+  jobs.demanda_diaria = async () => {
+    const raw = await dailyChunks('DemaSIN', 'Sistema', addDays(today, -45), today);
+    const series = raw.filter(x => Number.isFinite(x.value)).map(x => ({ date: x.date, gwh: +(x.value / 1e6).toFixed(2) }));
+    if (!series.length) throw new Error('DemaSIN sin datos');
+    return { source: 'XM', metrica: 'DemaSIN', updated_at: stamp, unit: 'GWh', series };
+  };
   jobs.embalses = async () => {
     const start = addDays(today, -60);
     const [vol, cap] = await Promise.all([dailyChunks('VoluUtilDiarEner', 'Sistema', start, today), dailyChunks('CapaUtilDiarEner', 'Sistema', start, today)]);

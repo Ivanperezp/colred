@@ -377,9 +377,31 @@ const riesgoCard = (r: any) => {
   const err = r.status === 'error' ? '<div class="warn" role="alert">Sin datos nuevos de XM; se muestra el último cálculo.</div>' : '';
   return card('riesgo', 'Riesgo de racionamiento', `<span class="rnivel" style="background:${BG[r.nivel]};color:${C[r.nivel]}">${r.nivel.toUpperCase()}</span>${rows}${err}<div class="src">Indicador propio con datos de XM · <a href="./como-funciona.html#riesgo">cómo se calcula</a></div>`);
 };
-const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any) => {
-  let h = riesgoCard(rie) + '<section id="precio" class="dc hourly-history"></section>' + ixCard();
-  if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
+const horaBogota = () => Number(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false })) % 24;
+const fechaCorta = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' });
+const barras = (v: number[], marca: number, label: string) => {
+  const W = 260, H = 54, max = Math.max(...v, 1), bw = W / v.length;
+  return `<svg class="bars" viewBox="0 0 ${W} ${H + 12}" role="img" aria-label="${esc(label)}">${v.map((x, i) => `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - x / max * H).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${(x / max * H).toFixed(1)}" rx="1.5" fill="${i === marca ? '#c2410c' : '#93a5d8'}"/>`).join('')}<text x="0" y="${H + 11}" font-size="9" fill="#6b7785">00:00</text><text x="${W / 2}" y="${H + 11}" font-size="9" fill="#6b7785" text-anchor="middle">12:00</text><text x="${W}" y="${H + 11}" font-size="9" fill="#6b7785" text-anchor="end">23:00</text></svg>`;
+};
+const precioHoyCard = (ph: any) => {
+  if (!ph?.series?.length) return '';
+  const v: number[] = ph.series.map((x: any) => x.value);
+  const esHoy = ph.fecha_operacion === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  const i = esHoy ? Math.min(horaBogota(), v.length - 1) : -1;
+  const big = i >= 0 ? `<div class="big">${fmt(v[i], 0)} <small>COP/kWh</small></div><div class="cmp">Previsto para esta hora (${String(i).padStart(2, '0')}:00) · mín. ${fmt(Math.min(...v))} · máx. ${fmt(Math.max(...v))}</div>`
+    : `<div class="big">${fmt(v.reduce((a, b) => a + b, 0) / v.length)} <small>COP/kWh</small></div><div class="cmp">Promedio previsto del ${esc(fechaCorta(ph.fecha_operacion))}</div>`;
+  return card('hoy', `Precio previsto ${esHoy ? 'de hoy' : 'del ' + esc(fechaCorta(ph.fecha_operacion))}`, `${big}${barras(v, i, 'Precio previsto por hora')}<div class="note">Costo marginal del despacho programado por XM. Es una estimación del precio de bolsa; el valor definitivo se publica unos días después.</div>${foot('xm', 'XM', ph.updated_at)}`);
+};
+const demandaDiariaHtml = (dd: any) => {
+  const s: { date: string; gwh: number }[] = dd?.series || []; if (!s.length) return '';
+  const l = s[s.length - 1], prev = s.slice(-8, -1), avg = prev.length ? prev.reduce((a, b) => a + b.gwh, 0) / prev.length : NaN;
+  const d = isFinite(avg) ? (l.gwh - avg) / avg * 100 : NaN;
+  return `<div class="big">${fmt(l.gwh, 1)} <small>GWh</small></div><div class="cmp">Total del ${esc(fechaCorta(l.date))}${isFinite(d) ? ` · <span class="${d <= 0 ? 'up' : 'dn'}">${d >= 0 ? '+' : '−'}${fmt(Math.abs(d), 1)} %</span> frente al promedio de la semana anterior` : ''}</div>${spark(s.slice(-30).map(x => x.gwh), 'Demanda diaria, últimos 30 días')}<div class="note">Demanda diaria de los últimos 30 días.</div>`;
+};
+const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any, ph?: any, dd?: any) => {
+  let h = riesgoCard(rie) + precioHoyCard(ph) + '<section id="precio" class="dc hourly-history"></section>' + ixCard();
+  if (dd?.series?.length) h += card('demanda', 'Demanda de energía', `${demandaDiariaHtml(dd)}${foot('xm', 'XM', dd.updated_at)}`);
+  else if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
   else h += card('demanda', 'Demanda de energía', '<div class="src">Sin datos disponibles.</div>');
   if (emb?.nacional && typeof emb.nacional.volumen_util_pct === 'number') {
     const a = emb.nacional.volumen_util_pct, b = emb.nacional.anio_anterior_pct;
@@ -439,10 +461,10 @@ document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListe
 document.querySelector<HTMLElement>('#nav a[href="./"]')!.addEventListener('click', e => { e.preventDefault(); closeFicha(); document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.getAttribute('href') === './')); map.flyTo({ center: [-73.8, 5.2], zoom: mobile ? 4.3 : 5.2 }); });
 
 (async () => {
-  const [style, , m, dem, pre, emb, al, rie, mix, cal, ixd] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json'), tryGet('api/v1/intercambios.json')]);
+  const [style, , m, dem, pre, emb, al, rie, mix, cal, ixd, ph, dd] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json'), tryGet('api/v1/intercambios.json'), tryGet('api/v1/precio_hoy.json'), tryGet('api/v1/demanda_diaria.json')]);
   calidadData = cal; if (ixd && Array.isArray(ixd.paises)) intercambios = ixd; meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
   if (!alertasData) { delete labels.alertas; on.alertas = false; }
-  buildLegend(); buildCards(dem, pre, emb, rie, mix); initSearch(); buildChips();
+  buildLegend(); buildCards(dem, pre, emb, rie, mix, ph, dd); initSearch(); buildChips();
   initMap(style); addIxMarkers();
   $<HTMLInputElement>('flow-t').onchange = e => { flowOn = (e.target as HTMLInputElement).checked; applyFlow(); };
   map.on('load', applyFlow);
