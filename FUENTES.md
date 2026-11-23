@@ -12,7 +12,7 @@ Ejecutar en tu PC (Node 18+): `cd web && npm run datos:oficiales` (o cada `datos
 | Listado de recursos | `/lists` `ListadoRecursos` (Entity `Sistema`, reintenta `Recurso`) | `Values.Code/Name/Type` (insensible a mayúsculas) | idem | variable | no |
 | Capacidad efectiva neta | `/daily` `CapEfecNeta` `Recurso` | `Values.Value` (kW; el script detecta kW vs MW) | idem | diaria | no |
 | UPME líneas construidas STN y STR | [Geoportal UPME, capa 17](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/Sistema_transmision_lineas_construidas/FeatureServer/17) | sistema, circuito, tensión, extremos, propietario y vigencia | geoservicio público UPME | cuando UPME actualiza (irregular) | sí, descarga de 798 trazados el 22 de noviembre de 2026 |
-| UPME subestaciones STN | servicio [Lineamientos](https://services.arcgis.com/deQSb0Gn7gDPf3uV/ArcGIS/rest/services/Lineamientos/FeatureServer), capa `22` | `NOMBRE_SUBESTACION` (incluye kV), `NOMBRE_PROPIETARIO` | geoservicio público UPME | cuando UPME actualiza (irregular) | sí, cobertura posiblemente parcial |
+| UPME subestaciones construidas STN y STR | [Geoportal UPME, capa 18](https://geo.upme.gov.co/server/rest/services/Capas_EnergiaElectrica/sistema_transmision_subestaciones_construidas/FeatureServer/18) | nombre, coordenadas, sistema, tensión, municipio, departamento y propietario | geoservicio público UPME | cuando UPME actualiza (irregular) | sí, descarga de 514 registros |
 | UPME plantas (capa 23) | Lineamientos, capa 23 | solo Sabana de Bogotá, coordenadas dudosas: **no se usa** | - | - | sí (descartada) |
 | Municipios (DIVIPOLA) | `https://geoportal.superservicios.gov.co/server/rest/services/MUNICIPIOS_FASE2/MapServer/0` (derivado del MGN-DANE; sin paginación; maxRecord 2000; f=geojson) | `ID_ESPACIA` (5 díg.), `NOM_MUNICI`, `NOM_DEPART`, `COD_DEPTO` | datos oficiales Superservicios sobre MGN-DANE | anual (MGN) | esquema sí; consulta con filtro devolvió 0 filas en 2 pruebas: el script exige >=1000 municipios válidos o falla sin escribir |
 | Departamentos | mismo servicio, capa `1` | `ID_ESPACIA` (2 díg.), `NOMBRE_DPT` (34 registros confirmados) | idem | anual | sí |
@@ -22,6 +22,8 @@ Ejecutar en tu PC (Node 18+): `cd web && npm run datos:oficiales` (o cada `datos
 | IDEAM alertas | datos.gov.co: Alertas Hidrológicas `h4gs-wsmg`, Deslizamientos `m3en-ptx7` (municipal), Incendios `vnzc-4d6e`, Meteomarinas `3e2y-7ych`; resource JSON no accesible en la prueba | columnas no confirmadas | datos abiertos IDEAM | diaria | ids sí (catálogo Socrata); datos no. Sin script (no hay estructura confirmada); no hay servicio ArcGIS de alertas confirmado |
 
 ## Cobertura en el mapa
+
+La capa opcional **Subestaciones UPME** muestra puntos del inventario oficial de subestaciones construidas STN y STR. Los registros pueden representar distintos niveles de tensión de un mismo predio. Las fichas OSM conservan sus nombres y solo se completan cuando hay una coincidencia única.
 
 El mapa ofrece una capa opcional de líneas construidas STN y STR de UPME a partir de `web/public/data/lineas_upme.geojson`. La leyenda muestra la fecha de descarga. La ficha muestra el circuito, la tensión, las subestaciones de inicio y fin, el propietario y la vigencia cuando están disponibles. Los trazos punteados de la capa OpenStreetMap son uniones estimadas entre tramos.
 
