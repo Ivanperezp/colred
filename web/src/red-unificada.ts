@@ -17,12 +17,6 @@ export function circuitKey(f: Feature, id: string) {
   return JSON.stringify(['UPME', p.sistema, kv(f), String(p.nombre).trim().toUpperCase(), ...endpoints]);
 }
 
-export function gapLengthKm(f: Feature) {
-  return paths(f).reduce((total, path) => total + path.slice(1).reduce(
-    (length, b, i) => length + distance(project(path[i]), project(b)), 0,
-  ), 0) / 1000;
-}
-
 function segmentDistance([x, y]: Coordinate, { a, b }: Segment) {
   const dx = b[0] - a[0], dy = b[1] - a[1];
   const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
