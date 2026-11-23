@@ -334,17 +334,19 @@ const buildLegend = () => {
     : '';
   $('legend-body').innerHTML = `<div class="lg"><label for="network-source">Fuente de la red</label>
   <select id="network-source"><option value="unificada">Vista unificada</option><option value="osm">OpenStreetMap</option><option value="upme">UPME</option></select>
-  <h3>Líneas por tensión</h3>${LINE_C.map(([t, c], i) => row(c, t, false, [4, 3, 2, 2][i])).join('')}
-  <span class="src">Selecciona una línea para resaltar su recorrido disponible.</span>
-  ${data.lineas_upme.features.length ? `<span class="src">Trazados UPME${upmeDate}</span>` : ''}
-  <h3>Centrales por tecnología</h3>${Object.entries(TECH).map(([t, c]) => row(c, t, true)).join('')}<span class="src">Tamaño según potencia (MW); punto pequeño = sin dato</span>
-  <h3>Subestaciones</h3><div><span class="dot" style="background:#fff;border:2px solid #14202e;box-shadow:none"></span>OpenStreetMap</div>
-  ${data.subestaciones_upme.features.length ? row(UPME_COLOR, 'UPME', true) : ''}
+  <h3>Líneas por tensión</h3><div class="legend-grid">${LINE_C.map(([t, c], i) => row(c, t, false, [4, 3, 2, 2][i])).join('')}</div>
+  <h3>Subestaciones</h3><div class="legend-grid">
+  <div><span class="dot" style="background:#fff;border:2px solid #14202e;box-shadow:none"></span>OpenStreetMap</div>
+  ${data.subestaciones_upme.features.length ? row(UPME_COLOR, 'UPME', true) : ''}</div>
+  <details class="legend-more"><summary>Más símbolos y opciones</summary>
+  <h3>Centrales por tecnología</h3><div class="legend-grid">${Object.entries(TECH).map(([t, c]) => row(c, t, true)).join('')}</div>
+  <span class="src">El tamaño indica potencia en MW. Punto pequeño: sin dato.</span>
   ${data.predios_subestaciones.features.length ? `<span class="src">Predios de OpenStreetMap visibles al acercar el mapa${data.predios_subestaciones.properties?.coverage ? ' · ' + esc(data.predios_subestaciones.properties.coverage) : ''}.</span>` : ''}
   ${alertasData ? '<h3>Alertas IDEAM</h3>' : ''}${!alertasData ? '' : Object.entries(LVL).map(([t, c]) => row(c, t[0].toUpperCase() + t.slice(1), true)).join('')}
   <h3>Intercambios</h3><div><svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" style="margin-right:8px;flex:none"><path d="M1 6H15" stroke="#0b6e4f" stroke-width="3"/><path d="M13 1L21 6L13 11Z" fill="#0b6e4f"/></svg>Sentido del saldo publicado</div>
-  <h3>Animación</h3><label class="sw-t"><input type="checkbox" id="flow-t" role="switch" ${flowOn ? 'checked' : ''}><span>Animación de corriente</span></label><span class="src">La animación es ilustrativa; no indica el sentido real del flujo.</span>
-  <span class="src" style="margin-top:10px">Fuentes: XM, UPME, DANE y OpenStreetMap.</span></div>`;
+  <label class="sw-t"><input type="checkbox" id="flow-t" role="switch" ${flowOn ? 'checked' : ''}><span>Animación ilustrativa</span></label>
+  ${data.lineas_upme.features.length ? `<span class="src">Trazados UPME${upmeDate}</span>` : ''}
+  </details></div>`;
   const source = $<HTMLSelectElement>('network-source');
   source.options[2].disabled = !data.lineas_upme.features.length && !data.subestaciones_upme.features.length;
   source.onchange = () => {
@@ -426,7 +428,7 @@ const handle = $('handle'), panel = $('panel');
 const setPanel = (open: boolean) => { panel.classList.toggle('closed', !open); handle.setAttribute('aria-expanded', String(open)); };
 handle.onclick = () => setPanel(panel.classList.contains('closed'));
 const mobile = matchMedia('(max-width:720px)').matches;
-if (mobile) { setPanel(false); $('legend').removeAttribute('open'); }
+if (mobile) setPanel(false);
 $('menu').onclick = () => { const o = $('nav').classList.toggle('open'); $('menu').setAttribute('aria-expanded', String(o)); };
 document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListener('click', e => {
   e.preventDefault(); closeFicha(); setPanel(true); $('nav').classList.remove('open'); $('menu').setAttribute('aria-expanded', 'false');
