@@ -51,9 +51,19 @@ async function main() {
     const ref = emb.filter(x => x.date <= ymd(addDays(new Date(last.date + 'T00:00:00Z'), -30))).pop();
     const tendencia = ref ? +(last.pct - ref.pct).toFixed(1) : null;
 
+    // Aportes: se prefiere el cociente AporEner / AporEnerMediHist (ambos en kWh). PorcApor viene como fracción (0,4 = 40 %).
     const aportes = await safe('aportes', async () => {
-      if (mP) { const s = (await daily(mP.id, addDays(today, -12), today)).sort((a, b) => a.date.localeCompare(b.date)).slice(-7); return s.length ? +mean(s.map(x => x.value)).toFixed(1) : null; }
-      if (mA && mH) { const [r, h] = await Promise.all([daily(mA.id, addDays(today, -12), today), daily(mH.id, addDays(today, -12), today)]); return ratioAportes(r, h); }
+      if (mA && mH) {
+        const [r, h] = await Promise.all([daily(mA.id, addDays(today, -12), today), daily(mH.id, addDays(today, -12), today)]);
+        const v = ratioAportes(r, h); if (v !== null) { usadas.aportes = `${mA.id}/${mH.id}`; return v; }
+      }
+      if (mP) {
+        const s = (await daily(mP.id, addDays(today, -12), today)).sort((a, b) => a.date.localeCompare(b.date)).slice(-7);
+        if (!s.length) return null;
+        const m = mean(s.map(x => x.value));
+        usadas.aportes = mP.id;
+        return +(m <= 3 ? m * 100 : m).toFixed(1);
+      }
       return null;
     });
     const escasez = mE ? await safe('escasez', async () => { const s = await daily(mE.id, addDays(today, -10), today, mE.entity); return s.length ? s.sort((a, b) => a.date.localeCompare(b.date)).pop().value : null; }) : null;
