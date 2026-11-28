@@ -6,6 +6,7 @@ export type Hoy = {
   metricas?: { generacion?: string };
   precio: (number | null)[]; generacion_total_mw: (number | null)[];
   por_tecnologia: Record<string, (number | null)[]>; por_recurso: Record<string, number[]>;
+  no_disponible?: { total_mw: number; capacidad_total_mw?: number | null; por_tecnologia?: Record<string, number>; plantas: { codigo: string; nombre: string; tecnologia: string; cap_mw: number; disp_mw: number; no_disp_mw: number }[] };
   fuera_de_servicio?: { total_mw: number; capacidad_total_mw?: number | null; por_tecnologia?: Record<string, number>; plantas: { codigo: string; nombre: string; tecnologia: string; cap_mw: number }[] };
   disponibilidad_total_mw?: (number | null)[];
 };
@@ -120,11 +121,14 @@ export function createHoy(ctx: Ctx) {
     return `<section class="dc" id="ahora" aria-live="off"><h2 id="ahora-h">${ahoraTitle()}</h2><div id="ahora-b">${ahoraBody()}</div>${footer()}</section>`;
   };
   const cardFuera = () => {
-    const f = d?.fuera_de_servicio; if (!d || !f?.plantas?.length) return '';
-    const top = f.plantas.slice(0, 6).map(p => `<div class="pl"><span><i style="background:${techColor(p.tecnologia)}"></i>${ctx.esc(short(p.nombre))} · ${ctx.esc(p.tecnologia)}</span><span>${ctx.fmt(p.cap_mw)} MW</span></div>`).join('');
-    const de = isNum(f.capacidad_total_mw) && f.capacidad_total_mw > f.total_mw ? `<div class="cmp">de ${ctx.fmt(f.capacidad_total_mw)} MW de capacidad efectiva</div>` : '';
-    const more = f.plantas.length > 6 ? `<div class="src" style="margin:4px 0 0">y ${f.plantas.length - 6} más</div>` : '';
-    return ctx.card('fuera', 'Fuera de servicio hoy', `<div class="big">${ctx.fmt(f.total_mw)} <small>MW</small></div>${de}<div style="margin-top:6px">${top}</div>${more}<div class="note">Plantas sin disponibilidad reportada a XM para hoy. Puede ser mantenimiento, falla o falta de combustible.</div>${footer()}`);
+    const n = d?.no_disponible, f = d?.fuera_de_servicio;
+    if (!d || !n?.plantas?.length) return '';
+    const fuera = new Set((f?.plantas || []).map(p => p.codigo));
+    const pct = isNum(n.capacidad_total_mw) && n.capacidad_total_mw > 0 ? n.total_mw / n.capacidad_total_mw * 100 : NaN;
+    const top = n.plantas.slice(0, 7).map(p => `<div class="pl"><span><i style="background:${techColor(p.tecnologia)}"></i>${ctx.esc(short(p.nombre))}${fuera.has(p.codigo) ? ' <b class="off">fuera de servicio</b>' : ''}</span><span>${ctx.fmt(p.disp_mw)} de ${ctx.fmt(p.cap_mw)} MW</span></div>`).join('');
+    const more = n.plantas.length > 7 ? `<div class="src" style="margin:4px 0 0">y ${n.plantas.length - 7} centrales más con capacidad reducida</div>` : '';
+    const tec = Object.entries(n.por_tecnologia || {}).sort((x, y) => y[1] - x[1]).map(([t, v]) => `${ctx.esc(t)} ${ctx.fmt(v)} MW`).join(' · ');
+    return ctx.card('fuera', 'Capacidad no disponible hoy', `<div class="big">${ctx.fmt(n.total_mw)} <small>MW</small></div>${isFinite(pct) ? `<div class="cmp">El ${ctx.fmt(pct, 1)} % de ${ctx.fmt(n.capacidad_total_mw ?? 0)} MW de centrales hidráulicas y térmicas · ${tec}</div>` : ''}<div style="margin-top:6px">${top}</div>${more}<div class="note">Capacidad efectiva menos la disponibilidad real que las centrales reportan a XM hoy. Puede ser mantenimiento, una falla, falta de combustible o de agua. No incluye solar ni eólica.</div>${footer()}`);
   };
   const updateCards = () => {
     const h = document.getElementById('ahora-h'), b = document.getElementById('ahora-b');

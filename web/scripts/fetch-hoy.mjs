@@ -68,6 +68,24 @@ export function construirHoy({ fecha, stamp, metricaGen, gen, disp, precio, list
   const plantas = [...grupos.values()].map(g => ({ codigo: g.codigos.join(','), nombre: g.codigos.length > 1 ? (coreName(g.nombre) || g.nombre).toUpperCase() : g.nombre, tecnologia: g.tecnologia, cap_mw: r1(g.cap_mw) })).sort((a, b) => b.cap_mw - a.cap_mw);
   const porTec = {};
   for (const p of plantas) porTec[p.tecnologia] = r1((porTec[p.tecnologia] || 0) + p.cap_mw);
+  // Capacidad no disponible (parcial o total) en hidráulicas, térmicas y otras despachables:
+  // capacidad efectiva menos la disponibilidad real promedio de las horas reportadas. Solar y eólica se excluyen
+  // porque su disponibilidad depende del sol y del viento, no de fallas.
+  const nd = new Map();
+  for (const [code, arr] of disp) {
+    const c = cap.get(code) ?? 0; if (!(c >= minMw)) continue;
+    const vals = arr.filter(x => x !== null); if (!vals.length) continue;
+    const { name, coarse } = info(code); if (coarse === 'Solar' || coarse === 'Eólica') continue;
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length / 1000;
+    const key = [coreName(name) || norm(name), ...romans(name)].join(' ');
+    const g = nd.get(key) || { nombre: name, tecnologia: coarse, cap_mw: 0, disp_mw: 0, codigos: [] };
+    g.cap_mw += c; g.disp_mw += Math.min(avg, c); g.codigos.push(code); nd.set(key, g);
+  }
+  const ndPlantas = [...nd.values()].map(g => ({ codigo: g.codigos.join(','), nombre: g.codigos.length > 1 ? (coreName(g.nombre) || g.nombre).toUpperCase() : g.nombre, tecnologia: g.tecnologia, cap_mw: r1(g.cap_mw), disp_mw: r1(g.disp_mw), no_disp_mw: r1(Math.max(0, g.cap_mw - g.disp_mw)) }));
+  const ndCap = ndPlantas.reduce((t, p) => t + p.cap_mw, 0);
+  const ndLista = ndPlantas.filter(p => p.no_disp_mw >= 10).sort((a, b) => b.no_disp_mw - a.no_disp_mw);
+  const ndTec = {}; for (const p of ndLista) ndTec[p.tecnologia] = r1((ndTec[p.tecnologia] || 0) + p.no_disp_mw);
+  const no_disponible = { total_mw: r1(ndLista.reduce((t, p) => t + p.no_disp_mw, 0)), capacidad_total_mw: r1(ndCap), por_tecnologia: ndTec, plantas: ndLista };
   const capTotal = [...cap.entries()].reduce((s, [code, v]) => (gen.has(code) || disp.has(code) ? s + v : s), 0); // capacidad efectiva de los recursos con datos hoy
   const pArr = precio ? precio : Array(24).fill(null);
   return {
@@ -77,6 +95,7 @@ export function construirHoy({ fecha, stamp, metricaGen, gen, disp, precio, list
     generacion_total_mw: total.map((x, h) => (rep[h] ? r1(x) : null)),
     por_tecnologia: Object.fromEntries(TECHS.map(t => [t, tech[t].map((x, h) => (rep[h] ? r1(x) : null))])),
     por_recurso: porRecurso,
+    no_disponible,
     fuera_de_servicio: { total_mw: r1(plantas.reduce((s, p) => s + p.cap_mw, 0)), capacidad_total_mw: capTotal > 0 ? r1(capTotal) : null, por_tecnologia: porTec, plantas },
     disponibilidad_total_mw: dispo.map((x, h) => (hasD(h) ? r1(x) : null)),
   };
@@ -110,7 +129,7 @@ async function main() {
     const precio = precioMap.get('Sistema') || [...precioMap.values()][0] || null;
     const out = construirHoy({ fecha, stamp, metricaGen, gen, disp, precio, listado, cap, codigos });
     writeJsonAtomic(file, out);
-    console.log(`OK hoy ${fecha}: ${gen.size} recursos, fuera de servicio ${out.fuera_de_servicio.total_mw} MW`);
+    console.log(`OK hoy ${fecha}: ${gen.size} recursos, fuera de servicio ${out.fuera_de_servicio.total_mw} MW, no disponible ${out.no_disponible.total_mw} de ${out.no_disponible.capacidad_total_mw} MW`);
   } catch (e) { console.error(`ERR hoy: ${e.message} (se conserva el archivo anterior)`); }
 }
 if (process.argv[1]?.endsWith('fetch-hoy.mjs')) main();
