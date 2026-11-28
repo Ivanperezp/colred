@@ -90,7 +90,7 @@ export function construirHoy({ fecha, stamp, metricaGen, gen, disp, precio, list
   const pArr = precio ? precio : Array(24).fill(null);
   return {
     source: 'XM', updated_at: stamp, fecha,
-    metricas: { generacion: metricaGen, disponibilidad: 'DispoReal', precio: 'CostMargDesp' },
+    metricas: { generacion: metricaGen, disponibilidad: metricaDispo, precio: 'CostMargDesp' },
     precio: pArr.map(x => (x === null ? null : r1(x))),
     generacion_total_mw: total.map((x, h) => (rep[h] ? r1(x) : null)),
     por_tecnologia: Object.fromEntries(TECHS.map(t => [t, tech[t].map((x, h) => (rep[h] ? r1(x) : null))])),
@@ -101,6 +101,17 @@ export function construirHoy({ fecha, stamp, metricaGen, gen, disp, precio, list
   };
 }
 
+let metricaDispo = 'DispoDeclarada';
+async function dispoHoy(fecha) {
+  for (const m of ['DispoDeclarada', 'DispoReal']) {
+    try {
+      const map = await hourly(m, 'Recurso', fecha);
+      for (const [k, a] of map) if (!a.some(x => x !== null)) map.delete(k);
+      if (map.size) { metricaDispo = m; return map; }
+    } catch (e) { console.warn(`  aviso: ${m}:`, e.message); }
+  }
+  return new Map();
+}
 const hourly = async (metric, entity, fecha) => parseHourlyByCode(await xm('hourly', { MetricId: metric, StartDate: fecha, EndDate: fecha, Entity: entity, Filter: [] }), fecha);
 
 async function main() {
@@ -118,7 +129,8 @@ async function main() {
     }
     if (!gen.size) throw new Error('sin generación programada para hoy ni ayer');
     const [disp, precioMap, listJson, capJson] = await Promise.all([
-      hourly('DispoReal', 'Recurso', fecha).catch(e => { console.warn('  aviso: DispoReal:', e.message); return new Map(); }),
+      // DispoReal de hoy llega vacío (XM la publica días después); DispoDeclarada sí trae lo que cada central declaró para hoy
+      dispoHoy(fecha),
       hourly('CostMargDesp', 'Sistema', fecha).catch(e => { console.warn('  aviso: CostMargDesp:', e.message); return new Map(); }),
       xm('lists', { MetricId: 'ListadoRecursos', StartDate: '', EndDate: '', Entity: 'Sistema', Filter: [] }),
       xm('daily', { MetricId: 'CapEfecNeta', StartDate: ymd(addDays(new Date(hoy + 'T00:00:00Z'), -10)), EndDate: hoy, Entity: 'Recurso', Filter: [] }).catch(e => { console.warn('  aviso: CapEfecNeta:', e.message); return null; }),
