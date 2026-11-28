@@ -11,6 +11,7 @@
     "datos:intercambios": "node scripts/fetch-intercambios.mjs",
     "datos:riesgo": "node scripts/fetch-riesgo.mjs",
     "datos:centrales": "node scripts/fetch-centrales-xm.mjs",
+    "datos:hoy": "node scripts/fetch-hoy.mjs",
     "datos:upme": "node scripts/fetch-upme.mjs",
     "datos:calidad": "node scripts/fetch-calidad.mjs",
     "datos:test": "node scripts/test-parsers.mjs",

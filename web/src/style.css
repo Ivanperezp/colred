@@ -157,3 +157,32 @@ button{font:inherit;color:inherit}
 .ix-empty i{background:#627184;box-shadow:0 0 0 3px rgba(98,113,132,.22)}
 .opr.zni{display:block;color:#5a4300;background:#fff6dc;line-height:1.4}
 .dc .bars{display:block;width:100%;height:auto;margin:6px 0 2px}
+
+/* Colombia hoy, hora a hora */
+#timeline{position:absolute;z-index:4;left:232px;right:344px;bottom:62px;margin:0 auto;width:min(540px,calc(100vw - 600px));min-width:380px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;padding:7px 12px 6px}
+.tl-play{width:36px;height:36px;border-radius:50%;border:0;background:var(--acc);color:#fff;display:grid;place-items:center;cursor:pointer;flex:none}
+.tl-play:hover{background:var(--acc-d)}
+.tl-mid{min-width:0}
+.tl-spark{position:relative;height:24px;margin:0 8px}
+.tl-spark svg{width:100%;height:100%;margin:0;display:block;overflow:visible}
+.tl-dot{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#c2410c;border:2px solid #fff;box-shadow:0 0 0 1px #c2410c;pointer-events:none}
+#tl-hour{width:100%;margin:2px 0 0;accent-color:var(--acc);height:20px;display:block}
+.tl-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:132px}
+#tl-label{font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl-mode{border:1px solid #c9d3df;background:#f4f7fb;color:var(--mut);border-radius:999px;padding:2px 9px;min-height:24px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.tl-mode:hover{border-color:var(--acc);color:var(--ink)}
+.tl-key{grid-column:1/-1;font-size:10.5px;line-height:1.3;color:var(--faint);margin-top:1px}
+#timeline.off .tl-key{display:none}
+.tl-key{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#fuera .pl span:first-child{min-width:0}
+.now-row{display:flex;justify-content:space-between;gap:10px}
+.now-row .big{font-size:22px}
+.now-gen{text-align:right}
+@media(max-width:1030px){#timeline{left:232px;right:344px;min-width:0;width:auto}}
+@media(max-width:720px){
+  #timeline{left:8px;right:8px;width:auto;bottom:100px;grid-template-columns:auto 1fr;padding:6px 10px}
+  .tl-right{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;min-width:0}
+  .tl-key{display:none}
+  body.panel-open #timeline{bottom:calc(34vh + 84px)}
+  body.sheet #timeline{display:none}
+}

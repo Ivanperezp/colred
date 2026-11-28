@@ -1,0 +1,69 @@
+name: Datos en vivo
+
+# Actualiza los datos de XM cada 15 minutos sin volver a publicar la web.
+# Los JSON se guardan en la rama `datos` y la web los lee desde raw.githubusercontent.com.
+# Cada ejecución dura ~5,5 horas y al terminar se relanza sola; el cron horario es solo un respaldo.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: vivo
+  cancel-in-progress: false
+
+jobs:
+  vivo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - name: Actualizar cada 15 minutos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fin=$((SECONDS + 330 * 60))
+          while [ $SECONDS -lt $fin ]; do
+            echo "::group::$(TZ=America/Bogota date '+%F %H:%M') actualización"
+            npm run -s datos:xm || true
+            npm run -s datos:hoy || true
+            npm run -s datos:mix || true
+            npm run -s datos:riesgo || true
+            npm run -s datos:intercambios || true
+            rm -rf /tmp/datos && mkdir -p /tmp/datos/api && cp -r public/api/v1 /tmp/datos/api/
+            (
+              cd /tmp/datos
+              git init -q -b datos
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add -A
+              git commit -q -m "Datos $(date -u +%FT%TZ)"
+              git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" datos
+            ) && echo "Publicado en la rama datos" || echo "No se pudo publicar en la rama datos"
+            echo "::endgroup::"
+            [ $((SECONDS + 15 * 60)) -lt $fin ] || break
+            sleep 900
+          done
+
+      - name: Relanzar
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run vivo.yml --ref main || true

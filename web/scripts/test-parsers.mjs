@@ -77,4 +77,22 @@ import { elegirMetricas, agregar, construir, paisDe } from './fetch-intercambios
   const physical = elegirMetricas([...sel.map(s => s.m), { id: 'ExpoEner', entity: 'Sistema' }, { id: 'ExpoEner', entity: 'Enlace' }]);
   assert.deepEqual(physical.map(s => s.m.entity), ['Enlace']);
 }
+import { parseHourlyByCode, capacidadMw, construirHoy, codigosDeCentrales } from './fetch-hoy.mjs';
+{
+  const hr = (code, vals) => ({ Id: code, Values: { code, ...Object.fromEntries(vals.map((v, i) => ['Hour' + String(i + 1).padStart(2, '0'), v])) } });
+  const gen = parseHourlyByCode({ Items: [{ Date: '2026-11-27', HourlyEntities: [hr('GVIO', ['1000000', '2000000', '']), hr('SOL1', ['0', '500000']), hr('TF1', ['300000'])] }, { Date: '2026-11-26', HourlyEntities: [hr('GVIO', ['9'])] }] }, '2026-11-27');
+  assert.equal(gen.size, 3); assert.equal(gen.get('GVIO')[1], 2000000); assert.equal(gen.get('GVIO')[2], null);
+  const disp = parseHourlyByCode({ Items: [{ Date: '2026-11-27', HourlyEntities: [hr('GVIO', ['100000', '100000']), hr('TF1', ['0', '0']), hr('TF2', ['0', '0']), hr('PEQ', ['0'])] }] }, '2026-11-27');
+  const listado = parseListado({ Items: [{ ListEntities: [{ Values: { Code: 'GVIO', Name: 'GUAVIO', Type: 'HIDRAULICA', EnerSource: 'AGUA' } }, { Values: { Code: 'SOL1', Name: 'SOLAR UNO', Type: 'SOLAR', EnerSource: 'RAD_SOLAR' } }, { Values: { Code: 'TF1', Name: 'TERMOFLORES 1', Type: 'TERMICA', EnerSource: 'GAS' } }, { Values: { Code: 'TF2', Name: 'TERMOFLORES 2', Type: 'TERMICA', EnerSource: 'GAS' } }, { Values: { Code: 'PEQ', Name: 'PEQUENA', Type: 'HIDRAULICA', EnerSource: 'AGUA' } }] }] });
+  const cap = capacidadMw({ Items: [{ Date: '2026-11-25', DailyEntities: [{ Code: 'TF1', Values: { Value: '150000' } }, { Code: 'TF2', Values: { Value: '100000' } }, { Code: 'PEQ', Values: { Value: '5000' } }, { Code: 'GVIO', Values: { Value: '1250000' } }] }] });
+  assert.equal(cap.get('GVIO'), 1250);
+  const hoy = construirHoy({ fecha: '2026-11-27', stamp: 's', metricaGen: 'GeneProgRedesp', gen, disp, precio: Array(24).fill(300), listado, cap, codigos: new Set(['GVIO']) });
+  assert.equal(hoy.generacion_total_mw[0], 1300); assert.equal(hoy.generacion_total_mw[1], 2500); assert.equal(hoy.generacion_total_mw[2], null);
+  assert.equal(hoy.por_tecnologia['Hidráulica'][0], 1000); assert.equal(hoy.por_tecnologia['Térmica'][0], 300); assert.equal(hoy.por_tecnologia['Solar'][1], 500);
+  assert.deepEqual(Object.keys(hoy.por_recurso), ['GVIO']); assert.equal(hoy.por_recurso.GVIO[0], 1000);
+  assert.equal(hoy.fuera_de_servicio.plantas.length, 1); assert.equal(hoy.fuera_de_servicio.plantas[0].cap_mw, 250); assert.equal(hoy.fuera_de_servicio.total_mw, 250); assert.equal(hoy.fuera_de_servicio.capacidad_total_mw, 1505);
+  assert.equal(hoy.fuera_de_servicio.plantas[0].tecnologia, 'Térmica'); assert.equal(hoy.fuera_de_servicio.por_tecnologia['Térmica'], 250);
+  assert.equal(hoy.disponibilidad_total_mw[0], 100); assert.equal(hoy.disponibilidad_total_mw[5], null); assert.equal(hoy.precio.length, 24);
+  assert.deepEqual([...codigosDeCentrales({ features: [{ properties: { xm_codigos: 'A,B' } }, { properties: {} }] })], ['A', 'B']);
+}
 console.log('test-parsers: OK');

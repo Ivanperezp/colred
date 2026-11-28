@@ -7,13 +7,23 @@ import { completeStationNames } from './nombres-subestaciones';
 import { circuitKey, complementaryLines, complementaryStations } from './red-unificada';
 import { stationSites, type StationSite } from './fichas-subestaciones';
 import { mountHistory } from './historial-xm';
+import { createHoy } from './hoy';
 
 maplibregl.setWorkerUrl(workerUrl);
 
 type Fc = { type: 'FeatureCollection'; features: any[]; sample?: boolean; properties?: { generated_at?: string; coverage?: string } };
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const jget = async (u: string) => { const r = await fetch(u); if (!r.ok) throw new Error(u); return r.json(); };
-const tryGet = (u: string) => jget(u).catch(() => null);
+// Los datos de XM se actualizan cada 15 min en la rama `datos` (flujo "Datos en vivo"), sin volver a publicar la web.
+// Se piden ahí y a la copia publicada con la web, y se usa la más reciente.
+const VIVO = 'https://raw.githubusercontent.com/Ivanperezp/colred/datos/';
+const stamp = (j: any) => +new Date(j?.updated_at || j?.generated_at || 0) || 0;
+const tryGet = async (u: string) => {
+  if (!u.startsWith('api/')) return jget(u).catch(() => null);
+  const t = Math.floor(Date.now() / 300e3);
+  const [vivo, local] = await Promise.all([jget(`${VIVO}${u}?t=${t}`).catch(() => null), jget(u).catch(() => null)]);
+  return vivo && stamp(vivo) >= stamp(local) ? vivo : local;
+};
 const hhmm = (s?: string) => { if (!s) return '--:--'; const d = new Date(s); return isNaN(+d) ? '--:--' : d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); };
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const REPORT = 'https://github.com/Ivanperezp/colred/issues/new?template=reportar-error.yml';
@@ -78,7 +88,7 @@ const load = async () => {
 };
 
 const rank = (n: string) => ({ roja: 3, naranja: 2, amarilla: 1 } as Record<string, number>)[n] || 0;
-const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-seleccion', 'lineas-flujo'], subestaciones: ['subestaciones', 'predios-relleno', 'predios-borde'], centrales: ['centrales', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
+const groups: Record<string, string[]> = { lineas: ['lineas-glow', 'lineas-casing', 'lineas', 'lineas-seleccion', 'lineas-flujo'], subestaciones: ['subestaciones', 'predios-relleno', 'predios-borde'], centrales: ['centrales', 'centrales-fs', 'centrales-label'], alertas: ['alertas'], intercambios: [] };
 const labels: Record<string, string> = { lineas: 'Líneas', subestaciones: 'Subestaciones', centrales: 'Centrales', alertas: 'Alertas IDEAM', intercambios: 'Intercambios' };
 const on: Record<string, boolean> = { lineas: true, subestaciones: true, centrales: true, alertas: true, intercambios: true };
 let calidadData: any = null; let alertasData: any = null; let isFallback = false; let map!: maplibregl.Map;
@@ -144,6 +154,7 @@ const addDataLayers = () => {
     lay({ id: 'dept-label', type: 'symbol', source: 'departamentos', minzoom: 5.4, layout: { 'text-field': ['get', 'nombre'], 'text-font': font, 'text-size': 11, 'text-transform': 'uppercase', 'text-letter-spacing': .08, 'text-max-width': 7 }, paint: { 'text-color': '#5d6b7b', 'text-halo-color': 'rgba(255,255,255,.9)', 'text-halo-width': 1.4 } });
     lay({ id: 'centrales-label', type: 'symbol', source: 'centrales', minzoom: 5, filter: ['>=', mw, 500], layout: { ...vis('centrales'), 'text-field': ['concat', ['get', 'nombre'], '\n', ['to-string', mw], ' MW'], 'text-font': fontB, 'text-size': 11, 'text-anchor': 'top', 'text-offset': [0, 1.1], 'text-optional': true }, paint: { 'text-color': '#14202e', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } });
   }
+  hoy.onStyle();
 };
 
 // ---------- Animación de corriente (ilustrativa) ----------
@@ -223,7 +234,7 @@ const popupHtml: Record<string, (p: any) => string> = {
       : '<div class="m">ColRed no tiene circuitos UPME verificados para este sitio.</div>';
     return `<div class="pp"><b>${esc(name)}</b>${details.filter(Boolean).map(value => `<div class="m">${esc(value)}</div>`).join('')}<h3>Circuitos registrados por UPME</h3>${circuits}${errLink(name)}</div>`;
   },
-  centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div>${errLink(p.nombre)}</div>`,
+  centrales: p => `<div class="pp"><b>${esc(/^central sin nombre$/i.test(String(p.nombre)) ? 'Central ' + String(p.tecnologia).toLowerCase() : p.nombre)}</b><div class="m">${esc(p.tecnologia)}</div><div class="m">${Number(p.mw) ? 'Potencia: ' + fmt(Number(p.mw)) + ' MW' : 'Potencia no registrada'}</div>${hoy.popupLine(p)}${errLink(p.nombre)}</div>`,
   alertas: p => `<div class="pp"><b>${esc(p.municipio)}</b><div class="m">${esc(p.departamento)}</div><div class="m">Alerta ${esc(p.nivel)} · ${esc(p.tipo)}</div><div class="m">${esc(p.texto)}</div></div>`,
 };
 const HIT = ['alertas', 'centrales', 'subestaciones', 'lineas', 'predios-relleno'];
@@ -370,6 +381,7 @@ const spark = (v: number[], label: string) => {
   return `<svg viewBox="0 0 200 60" preserveAspectRatio="none" role="img" aria-label="${label}"><polygon points="0,60 ${pts} 200,60" fill="#2457d6" opacity=".1"/><polyline points="${pts}" fill="none" stroke="#2457d6" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
 };
 const card = (id: string, h: string, body: string) => `<section class="dc" id="${id}"><h2>${h}</h2>${body}</section>`;
+const hoy = createHoy({ map: () => map, features: () => data.centrales.features, tech: TECH, fmt, esc, card, foot: foot as any, centralsOn: () => on.centrales });
 const riesgoCard = (r: any) => {
   if (!r || !['bajo', 'medio', 'alto'].includes(r.nivel)) return '';
   const C: Record<string, string> = { bajo: '#0a7a45', medio: '#b86e00', alto: '#b42318' }, BG: Record<string, string> = { bajo: '#e3f5ec', medio: '#fff1d6', alto: '#fde4e1' };
@@ -399,7 +411,7 @@ const demandaDiariaHtml = (dd: any) => {
   return `<div class="big">${fmt(l.gwh, 1)} <small>GWh</small></div><div class="cmp">Total del ${esc(fechaCorta(l.date))}${isFinite(d) ? ` · <span class="${d <= 0 ? 'up' : 'dn'}">${d >= 0 ? '+' : '−'}${fmt(Math.abs(d), 1)} %</span> frente al promedio de la semana anterior` : ''}</div>${spark(s.slice(-30).map(x => x.gwh), 'Demanda diaria, últimos 30 días')}<div class="note">Demanda diaria de los últimos 30 días.</div>`;
 };
 const buildCards = (dem: any, pre: any, emb: any, rie?: any, mix?: any, ph?: any, dd?: any) => {
-  let h = riesgoCard(rie) + precioHoyCard(ph) + '<section id="precio" class="dc hourly-history"></section>' + ixCard();
+  let h = hoy.cardAhora() + riesgoCard(rie) + precioHoyCard(ph) + hoy.cardFuera() + '<section id="precio" class="dc hourly-history"></section>' + ixCard();
   if (dd?.series?.length) h += card('demanda', 'Demanda de energía', `${demandaDiariaHtml(dd)}${foot('xm', 'XM', dd.updated_at)}`);
   else if (dem?.series?.length) { const s: S = dem.series.slice(-48); const l = s[s.length - 1]; h += card('demanda', 'Demanda de energía', `<div class="big">${fmt(l.value)} <small>${esc(dem.unit)}</small></div>${spark(s.map(x => x.value), 'Demanda reciente')}${foot('xm', 'XM', dem.updated_at)}`); flagSample(dem); }
   else h += card('demanda', 'Demanda de energía', '<div class="src">Sin datos disponibles.</div>');
@@ -447,7 +459,7 @@ const initSearch = () => {
 
 // ---------- UI ----------
 const handle = $('handle'), panel = $('panel');
-const setPanel = (open: boolean) => { panel.classList.toggle('closed', !open); handle.setAttribute('aria-expanded', String(open)); };
+const setPanel = (open: boolean) => { document.body.classList.toggle('panel-open', open); panel.classList.toggle('closed', !open); handle.setAttribute('aria-expanded', String(open)); };
 handle.onclick = () => setPanel(panel.classList.contains('closed'));
 const mobile = matchMedia('(max-width:720px)').matches;
 if (mobile) setPanel(false);
@@ -461,9 +473,10 @@ document.querySelectorAll<HTMLElement>('[data-go]').forEach(a => a.addEventListe
 document.querySelector<HTMLElement>('#nav a[href="./"]')!.addEventListener('click', e => { e.preventDefault(); closeFicha(); document.querySelectorAll('#nav a').forEach(x => x.classList.toggle('on', x.getAttribute('href') === './')); map.flyTo({ center: [-73.8, 5.2], zoom: mobile ? 4.3 : 5.2 }); });
 
 (async () => {
-  const [style, , m, dem, pre, emb, al, rie, mix, cal, ixd, ph, dd] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json'), tryGet('api/v1/intercambios.json'), tryGet('api/v1/precio_hoy.json'), tryGet('api/v1/demanda_diaria.json')]);
+  const [style, , m, dem, pre, emb, al, rie, mix, cal, ixd, ph, dd, hy] = await Promise.all([fetchStyle(), load(), tryGet('api/v1/meta.json'), tryGet('api/v1/demanda.json'), tryGet('api/v1/precio_bolsa.json'), tryGet('api/v1/embalses.json'), tryGet('api/v1/alertas.json'), tryGet('api/v1/riesgo.json'), tryGet('api/v1/generacion.json'), tryGet('api/v1/calidad_municipios.json'), tryGet('api/v1/intercambios.json'), tryGet('api/v1/precio_hoy.json'), tryGet('api/v1/demanda_diaria.json'), tryGet('api/v1/hoy.json')]);
   calidadData = cal; if (ixd && Array.isArray(ixd.paises)) intercambios = ixd; meta.v = m; alertasData = al && !al.sample ? al : null; flagSample(m);
   if (!alertasData) { delete labels.alertas; on.alertas = false; }
+  hoy.init(hy);
   buildLegend(); buildCards(dem, pre, emb, rie, mix, ph, dd); initSearch(); buildChips();
   initMap(style); addIxMarkers();
   $<HTMLInputElement>('flow-t').onchange = e => { flowOn = (e.target as HTMLInputElement).checked; applyFlow(); };

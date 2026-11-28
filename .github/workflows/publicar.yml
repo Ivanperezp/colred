@@ -56,7 +56,7 @@ jobs:
           git push
 
       - name: Datos de XM
-        run: npm run datos:xm || true; npm run datos:mix || true; npm run datos:riesgo || true; npm run datos:intercambios || true
+        run: npm run datos:xm || true; npm run datos:hoy || true; npm run datos:mix || true; npm run datos:riesgo || true; npm run datos:intercambios || true
         continue-on-error: true
 
       - run: npm run build
